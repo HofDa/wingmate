@@ -29,6 +29,7 @@ import {
 import { pca2, fitShapeLDA, fitCalibratedShapeLDA } from "./classifier/morphometrics.js";
 import { landmarkBlock, alignLandmarkBlocks } from "./classifier/landmarks.js";
 import { createWalkView, traceWalk } from "./walk.js";
+import { createTrainingView } from "./training.js";
 
 const $ = (s) => document.querySelector(s);
 const STORAGE_KEY = "wingmate-references-v2",
@@ -39,6 +40,7 @@ const state = {
   graph: null,
   graphInfo: null,
   query: null, // { features, preprocessing, specimenArchiveId }
+  model: null, // active frozen model runtime (training mode) or null = live
 };
 
 function message(target, text, kind = "info") {
@@ -113,46 +115,42 @@ function loadRefs() {
       );
   } catch {}
 }
+let training = null;
 function refreshReferences() {
+  training?.refresh();
+  window.dispatchEvent(new CustomEvent("wing-references-change", { detail: { count: state.references.length } }));
   const by = {};
   for (const r of state.references) by[r.species] = (by[r.species] || 0) + 1;
   const taxa = Object.keys(by).sort(),
-    specimens = new Set(state.references.map(groupOf)).size,
-    minCal = Math.ceil(1 / CLASSIFIER_DEFAULTS.epsilon) - 1;
-  $("#refCount").textContent =
-    `${state.references.length} Referenzen · ${specimens} Exemplare · ${taxa.length} Taxa`;
-  const list = $("#refList");
-  list.replaceChildren();
-  for (const t of taxa) {
-    const li = document.createElement("li"),
-      name = document.createElement("span"),
-      n = document.createElement("span");
-    name.textContent = t;
-    n.textContent = by[t] + (by[t] < minCal ? ` · <${minCal} → nicht kalibrierbar` : "");
-    n.className = by[t] < minCal ? "warn" : "";
-    li.append(name, n);
-    list.append(li);
-  }
+    specimens = new Set(state.references.map(groupOf)).size;
+  $("#refCount").textContent = state.references.length
+    ? `${state.references.length} Referenzen · ${specimens} Exemplare · ${taxa.length} Taxa · Details unter „Modell trainieren“`
+    : "Noch keine Referenzen. Ein sicher bestimmtes Exemplar unter „Exemplar“ freigeben und „Als Referenz …“ wählen.";
   drawEmbedding();
 }
 function addReference() {
   const species = $("#speciesInput").value.trim();
-  if (!species) return message("#refStatus", "Bitte Taxon/Art angeben.", "error");
-  if (!state.query) return message("#refStatus", "Zuerst ein Exemplar in der QC akzeptieren.", "error");
+  if (!species) return message("#refFormStatus", "Bitte Taxon/Art angeben.", "error");
+  if (!state.query) return message("#refFormStatus", "Zuerst ein Exemplar in der QC akzeptieren.", "error");
   const archive = state.query.specimenArchiveId;
   if (archive && state.references.some((r) => r.specimenArchiveId === archive))
-    return message("#refStatus", "Dieses akzeptierte Exemplar ist bereits eine Referenz.", "error");
+    return message("#refFormStatus", "Dieses akzeptierte Exemplar ist bereits eine Referenz.", "error");
   state.references.push({
     id: crypto.randomUUID(),
     species,
     specimenId: $("#specimenInput").value.trim() || null,
+    sex: $("#sexInput").value || null,
+    series: $("#seriesInput").value.trim() || null,
     specimenArchiveId: archive,
     preprocessingVersion: PREPROCESSING_VERSION,
     preprocessing: state.query.preprocessing,
     features: compactFeatures(state.query.features),
     created: new Date().toISOString(),
   });
-  if (saveRefs()) message("#refStatus", `Referenz gespeichert: ${species}`, "ok");
+  if (saveRefs()) {
+    message("#refFormStatus", "");
+    window.dispatchEvent(new CustomEvent("wing-reference-added", { detail: { species } }));
+  }
   walkView.reset();
   refreshReferences();
 }
@@ -208,7 +206,10 @@ async function importRefs(file) {
 function space(refs, extra = [], { mode, params } = reservoirSettings()) {
   const all = [...refs.map((r) => r.features), ...extra],
     blocks = commonBlocks(all);
-  if (!blocks.length) throw Error("Keine gemeinsamen Merkmalsblöcke");
+  if (!blocks.length)
+    throw Error(
+      "Dieses Exemplar und die Referenzen haben keine gemeinsamen Merkmale. Beispiel: Die Referenzen haben nur Landmarken – dann für dieses Exemplar alle Landmarken setzen und neu freigeben.",
+    );
   // Landmarks enter as Procrustes-aligned coordinates (label-free GPA over
   // references and query), not as raw pixel positions.
   const aligned = blocks.includes("landmarks") ? alignLandmarkBlocks(all) : null,
@@ -227,8 +228,42 @@ function space(refs, extra = [], { mode, params } = reservoirSettings()) {
     groups: refs.map(groupOf),
   };
 }
+// Identification with the active frozen model (training mode).
+function classifyWithModel() {
+  const runtime = state.model,
+    m = runtime.model;
+  try {
+    footer("Klassifiziere mit eingefrorenem Modell …");
+    const r = runtime.classify(state.query.features);
+    renderResults({ scores: r.scores, knn: r.knn, conformal: r.conformal, best: r.best, n: runtime.labels.length + 1, blocks: m.blocks });
+    showWalk(runtime.ctx, r.qs, runtime.labels);
+    const box = ldaBox();
+    if (r.lda) renderLDAProbabilities(box, r.lda.probabilities, r.lda.model, Math.min(...Object.values(m.taxa).map((t) => t.specimens)));
+    else if (m.lda) box.append(note("mini", "Procrustes + LDA: Für dieses Exemplar fehlen vollständige Landmarken desselben Schemas."));
+    drawEmbedding({ embeddings: runtime.ctx.embeddings, labels: runtime.labels }, r.embedding);
+    const primary = m.evaluation.methods[m.primary],
+      pick = m.primary === "lda" ? r.lda?.probabilities : m.primary === "knn" ? r.knn : r.scores,
+      top = pick ? Object.entries(pick).sort((a, b) => b[1] - a[1])[0] : null,
+      inTraining =
+        state.query.specimenArchiveId &&
+        state.references.some((ref) => ref.specimenArchiveId === state.query.specimenArchiveId && m.references.ids?.includes(ref.id));
+    message(
+      "#classifyStatus",
+      `Modell „${m.name}“ (${m.createdAt.slice(0, 10)}). Empfehlung nach Kreuzvalidierung: ${primary.name} → ` +
+        (top ? `${top[0]} (${(100 * top[1]).toFixed(0)} %)` : "nicht verfügbar für diese Aufnahme") +
+        `; im Training ${(100 * primary.balancedAccuracy).toFixed(1)} % balanciert richtig.` +
+        (inTraining ? " Achtung: Dieses Exemplar war Teil des Trainings – das Ergebnis ist zu optimistisch." : ""),
+      inTraining ? "warn" : "ok",
+    );
+    footer("Klassifikation abgeschlossen.");
+  } catch (e) {
+    message("#classifyStatus", e.message, "error");
+    footer("Fehler.");
+  }
+}
 function classify() {
   if (!state.query) return message("#classifyStatus", "Zuerst ein Exemplar in der QC akzeptieren.", "error");
+  if (state.model) return classifyWithModel();
   const self = state.query.specimenArchiveId,
     refs = state.references.filter((r) => usable(r) && (!self || r.specimenArchiveId !== self));
   const taxa = new Set(refs.map((r) => r.species));
@@ -244,7 +279,7 @@ function classify() {
       conformal = conformalPredict(qs, s.labels, calibrate(s.ctx, s.labels, s.groups), undefined),
       best = Math.max(...qs);
     renderResults({ scores, knn, conformal, best, n: refs.length + 1, blocks: s.blocks });
-    showWalk(s, qs, refs);
+    showWalk(s.ctx, qs, s.labels);
     renderLDA(refs);
     drawEmbedding(s, q);
     message(
@@ -262,10 +297,10 @@ function classify() {
 }
 // Same transition rows as rwrScores; the sampled trajectory is seeded so a
 // given query always shows the same illustrative walk.
-function showWalk(s, qs, refs) {
+function showWalk(ctx, qs, species) {
   const { alpha, steps } = CLASSIFIER_DEFAULTS,
-    { P, query } = rwrTransitions(s.ctx, qs),
-    labels = [...refs.map((r, i) => `${r.species} · #${i + 1}`), "Anfrage"];
+    { P, query } = rwrTransitions(ctx, qs),
+    labels = [...species.map((t, i) => `${t} · #${i + 1}`), "Anfrage"];
   walkView.show({
     P,
     query,
@@ -277,11 +312,11 @@ function showWalk(s, qs, refs) {
 function clearResults() {
   const box = $("#resultBars");
   box.classList.add("empty");
-  box.textContent = "Noch keine Klassifikation.";
+  box.textContent = "Noch nichts bestimmt. Unter „Exemplar“ ein Bild prüfen, freigeben und „Bestimmen“ wählen.";
   for (const id of ["#simMetric", "#entropyMetric", "#nodeMetric", "#knnMetric"]) $(id).textContent = "—";
   $("#predictionSet").textContent = "";
   const pill = $("#openSetPill");
-  pill.textContent = "open-set: —";
+  pill.textContent = "offene Menge: —";
   delete pill.dataset.kind;
   walkView.reset();
 }
@@ -295,7 +330,7 @@ function landmarkRefs(refs, query = null) {
   const aligned = alignLandmarkBlocks(all);
   return { X: refs.map((r) => aligned.get(r.features)), q: query ? aligned.get(query) : null, labels, groups: refs.map(groupOf) };
 }
-function renderLDA(refs) {
+function ldaBox() {
   let box = $("#ldaResult");
   if (!box) {
     box = document.createElement("div");
@@ -303,27 +338,33 @@ function renderLDA(refs) {
     $("#predictionSet").after(box);
   }
   box.replaceChildren();
-  const data = landmarkRefs(refs, state.query.features);
+  return box;
+}
+const note = (className, textContent, kind = "") =>
+  Object.assign(document.createElement("p"), { className, textContent, ...(kind ? { dataset: { kind } } : {}) });
+// Live: fit Procrustes + LDA on the current references for this query.
+function renderLDA(refs) {
+  const box = ldaBox(),
+    data = landmarkRefs(refs, state.query.features);
   if (!data) {
     const missing = refs.filter((r) => !r.features.blocks.landmarks).length;
     box.append(
-      Object.assign(document.createElement("p"), {
-        className: "mini",
-        textContent: !state.query.features.blocks.landmarks
+      note(
+        "mini",
+        !state.query.features.blocks.landmarks
           ? "Procrustes + LDA: Für dieses Exemplar sind keine vollständigen Landmarken gesetzt (oder die Orientierung ist nicht bestätigt)."
           : `Procrustes + LDA: ${missing} Referenzen ohne vollständige Landmarken desselben Schemas.`,
-      }),
+      ),
     );
     return;
   }
   const model = fitCalibratedShapeLDA(data.X, data.labels, data.groups),
-    proba = Object.entries(model.predictProba(data.q)).sort((a, b) => b[1] - a[1]),
-    perTaxon = {};
-  new Set(data.groups.map((g, i) => data.labels[i] + "\u0000" + g)).forEach((k) => {
-    const t = k.split("\u0000")[0];
-    perTaxon[t] = (perTaxon[t] || 0) + 1;
-  });
-  const fewest = Math.min(...Object.values(perTaxon));
+    specimens = {};
+  data.groups.forEach((g, i) => (specimens[data.labels[i]] ??= new Set()).add(g));
+  renderLDAProbabilities(box, model.predictProba(data.q), model, Math.min(...Object.values(specimens).map((v) => v.size)));
+}
+function renderLDAProbabilities(box, probabilities, model, fewest) {
+  const proba = Object.entries(probabilities).sort((a, b) => b[1] - a[1]);
   box.append(Object.assign(document.createElement("h3"), { textContent: "Procrustes + LDA (Landmarken)" }));
   for (const [label, p] of proba.slice(0, 5)) {
     const row = document.createElement("div"),
@@ -342,25 +383,24 @@ function renderLDA(refs) {
     box.append(row);
   }
   box.append(
-    Object.assign(document.createElement("p"), {
-      className: "mini",
-      textContent:
-        `Posterior unter der Annahme, dass das Tier zu einem der ${model.taxa.length} Referenztaxa gehört. ` +
+    note(
+      "mini",
+      `Posterior unter der Annahme, dass das Tier zu einem der ${model.taxa.length} Referenztaxa gehört. ` +
         `${model.components} Hauptkomponenten (${Math.round(100 * model.explainedVariance)} % Formvarianz), Ledoit–Wolf-Schrumpfung ${model.shrinkage.toFixed(2)}, ` +
         (model.temperature
           ? `Wahrscheinlichkeiten per Leave-one-out kalibriert (Temperatur ${model.temperature.toFixed(2)}). `
           : "zu wenige Referenzen zum Kalibrieren – Wahrscheinlichkeiten unkalibriert. ") +
         "LDA erkennt keine unbekannten Arten – dafür das konforme Set oben beachten.",
-    }),
+    ),
   );
-  if (fewest < 5) {
-    const warning = Object.assign(document.createElement("p"), {
-      className: "status",
-      textContent: `Nur ${fewest} Exemplar(e) im kleinsten Taxon: Auf realen Bombus-Daten liegt die Trefferquote bei 3 Exemplaren/Art um 65 %, bei 10 um 80 % (test-data/landmark-benchmark.json).`,
-    });
-    warning.dataset.kind = "warn";
-    box.append(warning);
-  }
+  if (fewest < 5)
+    box.append(
+      note(
+        "status",
+        `Nur ${fewest} Exemplar(e) im kleinsten Taxon: Auf realen Bombus-Daten liegt die Trefferquote bei 3 Exemplaren/Art um 65 %, bei 10 um 80 % (test-data/landmark-benchmark.json).`,
+        "warn",
+      ),
+    );
 }
 function renderResults({ scores, knn, conformal, best, n, blocks }) {
   const box = $("#resultBars");
@@ -395,18 +435,18 @@ function renderResults({ scores, knn, conformal, best, n, blocks }) {
     pill = $("#openSetPill"),
     set = $("#predictionSet");
   if (!conformal.openSetValid) {
-    pill.textContent = "open-set: nicht kalibriert";
+    pill.textContent = "offene Menge: nicht kalibriert";
     pill.dataset.kind = "warn";
     set.textContent =
       `Vorhersage-Set (${pct} %): {${conformal.set.join(", ")}}. Nicht aussagekräftig: ` +
       `${conformal.uncalibrated.join(", ")} ${conformal.uncalibrated.length > 1 ? "haben" : "hat"} weniger als ${Math.ceil(1 / conformal.epsilon) - 1} ` +
       "Referenzexemplare, daher kann kein Taxon abgelehnt und kein unbekanntes Tier erkannt werden.";
   } else if (conformal.unknown) {
-    pill.textContent = "open-set: keinem Referenztaxon ähnlich";
+    pill.textContent = "offene Menge: keiner Art ähnlich";
     pill.dataset.kind = "warn";
     set.textContent = `Vorhersage-Set (${pct} %) ist leer: Das Exemplar ist untypischer als ${pct} % der Referenzen jedes Taxons. Mögliches neues Taxon, Aufnahmefehler oder Referenzlücke.`;
   } else {
-    pill.textContent = conformal.set.length === 1 ? "open-set: eindeutig" : "open-set: mehrdeutig";
+    pill.textContent = conformal.set.length === 1 ? "offene Menge: eindeutig" : "offene Menge: mehrdeutig";
     pill.dataset.kind = conformal.set.length === 1 ? "ok" : "warn";
     set.textContent = `Vorhersage-Set (${pct} %): {${conformal.set.join(", ")}} — enthält das wahre Taxon bei austauschbaren Daten in ≈${pct} % der Fälle.`;
   }
@@ -420,7 +460,7 @@ function validate() {
     out = $("#validation");
   out.replaceChildren();
   if (new Set(refs.map((r) => r.species)).size < 2 || refs.length < 4)
-    return message("#classifyStatus", "Validierung braucht ≥ 4 Referenzen aus ≥ 2 Taxa.", "error");
+    return message("#refStatus", "Validierung braucht ≥ 4 Referenzen aus ≥ 2 Taxa.", "error");
   try {
     const current = space(refs),
       rows = [
@@ -460,9 +500,9 @@ function validate() {
     note.textContent =
       "Gruppiertes Leave-one-out: Jedes Exemplar (Exemplar-ID bzw. QC-Archiv-ID) wird samt allen seiner Flügel entfernt. Taxa mit nur einem Exemplar sind nicht auswertbar. Kleine Referenzsätze ergeben sehr unsichere Werte.";
     out.append(table, note);
-    message("#classifyStatus", "Validierung abgeschlossen.", "ok");
+    message("#refStatus", "Validierung abgeschlossen.", "ok");
   } catch (e) {
-    message("#classifyStatus", e.message, "error");
+    message("#refStatus", e.message, "error");
   }
 }
 
@@ -598,9 +638,10 @@ window.addEventListener("wing-preprocessing-change", ({ detail }) => {
     }
   }
   $("#addReferenceBtn").disabled = $("#classifyBtn").disabled = !state.query;
-  const a = detail.items.wip ? (detail.items.wip.accepted ? "WIP ✓" : "WIP (QC offen)") : "WIP —",
-    b = detail.items.venation ? (detail.items.venation.accepted ? "Venation ✓" : "Venation (QC offen)") : "Venation —";
-  $("#imageStatus").textContent = `${a} · ${b}`;
+  const describe = (item, name) =>
+    !item ? null : `${name} ${item.accepted ? "freigegeben" : item.result ? "wird geprüft" : item.error ? "fehlerhaft" : "wird verarbeitet"}`;
+  $("#imageStatus").textContent =
+    [describe(detail.items.venation, "Venation"), describe(detail.items.wip, "WIP")].filter(Boolean).join(" · ") || "Noch keine Bilder.";
 });
 $("#addReferenceBtn").disabled = $("#classifyBtn").disabled = true;
 $("#addReferenceBtn").addEventListener("click", addReference);
@@ -638,12 +679,30 @@ $("#clearRefsBtn").addEventListener("click", () => {
 });
 $("#clearImagesBtn").addEventListener("click", () => {
   $("#wipInput").value = $("#venInput").value = "";
-  drawPlaceholder($("#wipCanvas"), "WIP / Reflexionslicht");
-  drawPlaceholder($("#venCanvas"), "Aderung / Durchlicht");
+  drawPlaceholder($("#wipCanvas"), "Bild hierher ziehen");
+  drawPlaceholder($("#venCanvas"), "Bild hierher ziehen");
 });
 
-drawPlaceholder($("#wipCanvas"), "WIP / Reflexionslicht");
-drawPlaceholder($("#venCanvas"), "Aderung / Durchlicht");
+drawPlaceholder($("#wipCanvas"), "Bild hierher ziehen");
+drawPlaceholder($("#venCanvas"), "Bild hierher ziehen");
+training = createTrainingView($("#trainingCard"), {
+  references: () =>
+    state.references.filter(usable).map((r) => ({
+      id: r.id,
+      species: r.species,
+      group: groupOf(r),
+      sex: r.sex ?? null,
+      series: r.series ?? null,
+      features: r.features,
+    })),
+  settings: reservoirSettings,
+  preprocessingVersion: PREPROCESSING_VERSION,
+  onChange: (runtime) => {
+    state.model = runtime;
+    clearResults();
+    $("#classifyBtn").textContent = runtime ? "Mit Modell bestimmen" : "Bestimmen";
+  },
+});
 loadRefs();
 updateMode();
 refreshReferences();

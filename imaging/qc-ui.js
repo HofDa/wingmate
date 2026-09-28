@@ -168,7 +168,7 @@ function render() {
     const article = document.createElement("article");
     article.className = "qc-item";
     const title = document.createElement("h3");
-    title.textContent = `${type.toUpperCase()} · ${item.name}`;
+    title.textContent = `${type === "wip" ? "WIP" : "Venation"} · ${item.name}`;
     article.append(title);
     if (!item.result) {
       const p = document.createElement("p");
@@ -176,7 +176,7 @@ function render() {
       article.append(p);
       if (item.error) {
         const reset = document.createElement("button");
-        reset.textContent = "Reset";
+        reset.textContent = "Korrekturen zurücksetzen";
         reset.className = "ghost";
         reset.onclick = () => {
           item.options = { originalSide: item.options.originalSide };
@@ -238,149 +238,110 @@ function render() {
     const r = item.result,
       m = r.metadata,
       q = m.maskQuality;
-    const status = document.createElement("p");
-    status.className = q.status === "GOOD" ? "qc-good" : "qc-review";
-    status.textContent = `Segmentation quality: ${q.status} · orientationConfidence = ${m.orientationConfidence} · ${item.accepted ? "ACCEPTED" : "nicht akzeptiert"}`;
-    article.append(status);
-    const metrics = document.createElement("p");
-    metrics.className = "mini";
-    metrics.textContent = `Fläche: ${q.wingArea} Analysepixel · Randkontakt: ${q.edgeContact ? "ja" : "nein"} · Fragmentierung: ${q.fragmentationScore.toFixed(3)} · Mask confidence: ${q.maskConfidence} (regelbasiert, keine Wahrscheinlichkeit). ${q.reasons.join(" · ")}`;
-    article.append(metrics);
-    const capture = document.createElement("p");
-    capture.className = "mini";
+    const el = (tag, props = {}, ...children) => {
+      const e = Object.assign(document.createElement(tag), props);
+      e.append(...children);
+      return e;
+    };
+    const button = (text, onclick, className = "ghost") =>
+      el("button", { type: "button", textContent: text, onclick, className, disabled: busy });
+    // Plain-language verdict first; the rule details follow in small print.
+    const orientationSure = m.orientationConfidence !== "low";
+    article.append(
+      el("p", {
+        className: q.status === "GOOD" && orientationSure ? "qc-good" : "qc-review",
+        textContent:
+          (q.status === "GOOD" ? "Maske plausibel" : "Maske prüfen") +
+          (orientationSure ? " · Orientierung wahrscheinlich richtig" : " · Orientierung unsicher") +
+          (item.accepted ? " · freigegeben" : ""),
+      }),
+    );
     const size = m.metricSize,
       cq = m.captureQuality;
-    capture.textContent = [
-      item.rigNote,
-      cq && `Schärfe ${cq.sharpnessInWing.toFixed(1)} · gesättigt ${(100 * cq.clippedFractionInWing).toFixed(2)} %`,
-      m.rigDrift?.medianDifference != null &&
-        `Rig-Abweichung ${m.rigDrift.medianDifference.toFixed(1)} (Grenze ${m.rigDrift.limit.toFixed(1)})`,
-      size &&
-        `Länge ${size.wingLengthMm.toFixed(2)} mm · Fläche ${size.wingAreaMm2.toFixed(2)} mm²${size.reliable ? "" : " (unsicher: Randkontakt)"}`,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    article.append(capture);
-    const grid = document.createElement("div");
-    grid.className = "qc-grid";
+    article.append(
+      el("p", {
+        className: "mini",
+        textContent: [
+          q.reasons.length ? "Hinweise: " + q.reasons.join(", ") : null,
+          item.rigNote,
+          size &&
+            `Länge ${size.wingLengthMm.toFixed(2)} mm · Fläche ${size.wingAreaMm2.toFixed(2)} mm²${size.reliable ? "" : " (unsicher: Randkontakt)"}`,
+          cq && `Schärfe ${cq.sharpnessInWing.toFixed(1)} · gesättigt ${(100 * cq.clippedFractionInWing).toFixed(2)} %`,
+          m.rigDrift?.medianDifference != null &&
+            `Rig-Abweichung ${m.rigDrift.medianDifference.toFixed(1)} (Grenze ${m.rigDrift.limit.toFixed(1)})`,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      }),
+    );
+    const grid = el("div", { className: "qc-grid" });
     grid.append(
-      view("ORIGINAL", canvas(item.image)),
-      view("MASK", maskCanvas(r.mask, r.analysis.width, r.analysis.height)),
-      view("NORMALIZED", canvas(r.normalized)),
-      view("OVERLAY", overlay(item)),
+      view("Original", canvas(item.image)),
+      view("Maske", maskCanvas(r.mask, r.analysis.width, r.analysis.height)),
+      view("Normalisiert", canvas(r.normalized)),
+      view("Kontur & Achse", overlay(item)),
     );
     article.append(grid);
-    const controls = document.createElement("div");
-    controls.className = "buttonrow";
-    for (const [label, fn] of [
-      [
-        "Flip 180°",
-        () => {
-          item.options.flipped180 = !item.options.flipped180;
-          item.options.standardConfirmed = false;
-          recalculate();
-        },
-      ],
-      [
-        "Mirror",
-        () => {
-          item.options.mirrored = !item.options.mirrored;
-          item.options.standardConfirmed = false;
-          recalculate();
-        },
-      ],
-      [
-        "Reset",
-        () => {
-          item.options = { originalSide: item.options.originalSide };
-          recalculate();
-        },
-      ],
-      [
-        "PNG exportieren",
-        () =>
-          download(
-            canvas(r.normalized).toDataURL(),
-            "normalized-" + type + ".png",
-          ),
-      ],
-      [
-        "Maske exportieren",
-        () =>
-          download(
-            maskCanvas(r.mask, r.analysis.width, r.analysis.height).toDataURL(),
-            "mask-" + type + ".png",
-          ),
-      ],
-    ]) {
-      const b = document.createElement("button");
-      b.textContent = label;
-      b.className = "ghost";
-      b.disabled = busy;
-      b.onclick = fn;
-      controls.append(b);
-    }
-    article.append(controls);
-    const side = document.createElement("label");
-    side.textContent = "Originalseite (bleibt erhalten)";
-    const select = document.createElement("select");
+
+    // Orientation: the one decision the user must make per image.
+    const select = el("select", { disabled: busy });
     for (const [value, text] of [
-      ["unknown", "Unbekannt"],
-      ["left", "Links"],
-      ["right", "Rechts"],
-    ]) {
-      const opt = new Option(text, value);
-      select.add(opt);
-    }
+      ["unknown", "unbekannt"],
+      ["left", "links"],
+      ["right", "rechts"],
+    ])
+      select.add(new Option(text, value));
     select.value = item.options.originalSide ?? "unknown";
-    select.disabled = busy;
     select.onchange = () => {
       item.options.originalSide = select.value;
       recalculate();
     };
-    side.append(select);
-    article.append(side);
-    const confirmed = document.createElement("label");
-    confirmed.className = "qc-check";
-    const check = document.createElement("input");
-    check.type = "checkbox";
-    check.checked = !!item.options.standardConfirmed;
-    check.disabled = busy;
+    const check = el("input", { type: "checkbox", checked: !!item.options.standardConfirmed, disabled: busy });
     check.onchange = () => {
       item.options.standardConfirmed = check.checked;
       recalculate();
     };
-    confirmed.append(
-      check,
-      " Standard geprüft: Basis links, Spitze rechts, anterior oben (rechte Referenzansicht).",
+    article.append(
+      el(
+        "fieldset",
+        { className: "qc-orient" },
+        el("legend", { textContent: "Orientierung" }),
+        el(
+          "div",
+          { className: "buttonrow" },
+          button("Um 180° drehen", () => {
+            item.options.flipped180 = !item.options.flipped180;
+            item.options.standardConfirmed = false;
+            recalculate();
+          }),
+          button("Spiegeln", () => {
+            item.options.mirrored = !item.options.mirrored;
+            item.options.standardConfirmed = false;
+            recalculate();
+          }),
+          el("label", { className: "inline" }, "Originalseite", select),
+        ),
+        el("label", { className: "qc-check" }, check, " Standard geprüft: Basis links, Spitze rechts, Vorderrand oben"),
+      ),
     );
-    article.append(confirmed);
-    const threshold = document.createElement("label");
-    threshold.textContent =
-      "Segmentierungsschwelle (RGB-Abstand; leer = automatisch)";
-    const input = document.createElement("input");
-    input.type = "number";
-    input.min = 1;
-    input.max = 255;
-    input.value = item.options.parameters?.threshold ?? "";
-    input.disabled = busy;
-    input.onchange = () => {
+    if (type === landmarkHost()) article.append(landmarkSection(item));
+
+    // Corrections and exports are rarely needed: folded away.
+    const threshold = el("input", {
+      type: "number",
+      min: 1,
+      max: 255,
+      value: item.options.parameters?.threshold ?? "",
+      disabled: busy,
+      placeholder: "automatisch",
+    });
+    threshold.onchange = () => {
       item.options.parameters = {
-        threshold: input.value
-          ? Math.max(1, Math.min(255, +input.value))
-          : null,
+        threshold: threshold.value ? Math.max(1, Math.min(255, +threshold.value)) : null,
       };
       recalculate();
     };
-    threshold.append(input);
-    article.append(threshold);
-    const manual = document.createElement("label");
-    manual.textContent =
-      "Manuell korrigierte Maske importieren (schwarz/weiß, gleiche Maße wie Original oder exportierte Analysemaske)";
-    const file = document.createElement("input");
-    file.type = "file";
-    file.accept = "image/png,image/bmp";
-    file.disabled = busy;
+    const file = el("input", { type: "file", accept: "image/png,image/bmp", disabled: busy });
     file.onchange = async () => {
       try {
         if (!file.files[0]) return;
@@ -416,16 +377,41 @@ function render() {
         $("#qcStatus").textContent = e.message;
       }
     };
-    manual.append(file);
-    article.append(manual);
-    if (type === landmarkHost()) article.append(landmarkSection(item));
-    const details = document.createElement("details"),
-      summary = document.createElement("summary"),
-      pre = document.createElement("pre");
-    summary.textContent = "Transformationsmatrix, Parameter und QC-Metadaten";
-    pre.textContent = JSON.stringify(m, null, 2);
-    details.append(summary, pre);
-    article.append(details);
+    article.append(
+      el(
+        "details",
+        { className: "disclosure-inline" },
+        el("summary", { textContent: "Maske korrigieren" }),
+        el("label", {}, "Segmentierungsschwelle (RGB-Abstand, leer = automatisch)", threshold),
+        el("label", {}, "Korrigierte Maske importieren (schwarz/weiß, Größe wie Original oder Analysemaske)", file),
+        el(
+          "div",
+          { className: "buttonrow" },
+          button("Alle Korrekturen zurücksetzen", () => {
+            item.options = { originalSide: item.options.originalSide };
+            recalculate();
+          }),
+        ),
+      ),
+      el(
+        "details",
+        { className: "disclosure-inline" },
+        el("summary", { textContent: "Export & Metadaten" }),
+        el(
+          "div",
+          { className: "buttonrow smallrow" },
+          button("Normalisiertes Bild (PNG)", () => download(canvas(r.normalized).toDataURL(), "normalized-" + type + ".png")),
+          button("Maske (PNG)", () =>
+            download(maskCanvas(r.mask, r.analysis.width, r.analysis.height).toDataURL(), "mask-" + type + ".png"),
+          ),
+        ),
+        el("p", {
+          className: "mini",
+          textContent: `Fläche ${q.wingArea} Analysepixel · Randkontakt ${q.edgeContact ? "ja" : "nein"} · Fragmentierung ${q.fragmentationScore.toFixed(3)} · Maskenvertrauen ${q.maskConfidence} (regelbasiert, keine Wahrscheinlichkeit).`,
+        }),
+        el("pre", { textContent: JSON.stringify(m, null, 2) }),
+      ),
+    );
     box.append(article);
   }
   const align = $("#qcAlignment");
@@ -489,7 +475,7 @@ function landmarkSection(item) {
   details.append(summary);
   const note = document.createElement("p");
   note.className = "mini";
-  note.textContent = `${s.name}. ${s.note} Punkte werden in Originalpixeln gespeichert und bleiben bei Flip/Mirror/Neuberechnung gültig.`;
+  note.textContent = `${s.name}. ${s.note} Die Punkte bleiben beim Drehen, Spiegeln und Neuberechnen gültig.`;
   details.append(note);
   let editor = null;
   const open = () => {
@@ -517,7 +503,7 @@ function landmarkSection(item) {
 function landmarksChanged() {
   const wasAccepted = Object.values(items).some((i) => i?.accepted);
   for (const i of Object.values(items)) if (i) i.accepted = false;
-  if (wasAccepted) $("#qcStatus").textContent = "Landmarken geändert – bitte erneut akzeptieren.";
+  if (wasAccepted) $("#qcStatus").textContent = "Landmarken geändert – bitte erneut freigeben.";
   updateButtons();
   emit();
 }
@@ -582,7 +568,7 @@ async function recalculate() {
           .every((i) => i.result)
       )
         $("#qcStatus").textContent =
-          "Bereit zur visuellen Prüfung. WIP-RGB wird ausschließlich geometrisch resampelt.";
+          "Bereit: Maske und Orientierung unten prüfen.";
     }
   }
 }
@@ -674,7 +660,7 @@ $("#qcAccept").onclick = async () => {
         i.result.metadata.specimenArchiveId = id;
       }
     $("#qcStatus").textContent =
-      "QC akzeptiert und lokal archiviert (Original, Maske, normalisiertes Bild und Transformation).";
+      "Freigegeben und lokal archiviert (Original, Maske, normalisiertes Bild, Transformation).";
   } catch (e) {
     $("#qcStatus").textContent =
       "Lokales Speichern fehlgeschlagen: " +
@@ -794,7 +780,7 @@ $("#clearImagesBtn").addEventListener("click", () => {
   items.wip = items.venation = null;
   render();
   emit();
-  $("#qcStatus").textContent = "Noch keine Vorverarbeitung.";
+  $("#qcStatus").textContent = "Noch kein Bild geladen.";
 });
 window.wingQC = {
   get items() {

@@ -122,6 +122,7 @@ const query = "cryptarum-M-BUM0435_SEG37A-R.dw.png";
   for (const [species, files] of Object.entries(refs))
     for (const [k, file] of files.entries()) {
       report.push(await annotate(file, k === 0));
+      await page.click("#refToggle");
       await page.fill("#speciesInput", species);
       await page.fill("#specimenInput", file.replace(/-[LR]\.dw\.png$/, ""));
       await page.click("#addReferenceBtn");
@@ -130,8 +131,16 @@ const query = "cryptarum-M-BUM0435_SEG37A-R.dw.png";
   const hasBlock = await page.evaluate(() => window.wingClassifier.state.query.features.blocks.landmarks?.length);
   await page.click("#classifyBtn");
   const lda = await page.evaluate(() => document.querySelector("#ldaResult")?.textContent ?? "");
+  await page.evaluate(() => {
+    window.wingShell.show("referenzen");
+    document.querySelector("#validateBtn").closest("details").open = true;
+  });
   await page.click("#validateBtn");
   const validation = await page.evaluate(() => [...document.querySelectorAll("#validation tbody tr")].map((r) => r.textContent));
+  await page.evaluate(() => {
+    window.wingShell.show("exemplar");
+    document.querySelector("#qcLandmarkCsv").closest("details").open = true;
+  });
   const [download] = await Promise.all([page.waitForEvent("download"), page.click("#qcLandmarkCsv")]),
     csvText = fs.readFileSync(await download.path(), "utf8");
   await page.screenshot({ path: process.env.SHOT || require("node:path").join(require("node:os").tmpdir(), "landmark-e2e.png"), fullPage: false, clip: { x: 0, y: 0, width: 1440, height: 1100 } });

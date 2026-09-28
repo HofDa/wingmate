@@ -2,192 +2,277 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1f6e4b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Wingmate" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="icons/wing.svg" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <title>Bee × Fly Connectome — WIP + Venation Prototype</title>
+  <title>Wingmate – Wildbienen-Bestimmung am Flügel</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="hero">
-    <div>
-      <div class="eyebrow">LOCAL RESEARCH PROTOTYPE</div>
-      <h1>Bee × Fly Connectome</h1>
-      <p>Wildbienen-ID aus <strong>Wing Interference Patterns (WIP)</strong> + <strong>Flügeladerung</strong>, projiziert durch ein Drosophila-inspiriertes Reservoir und ausgewertet per Random-Walk auf einem Referenzgraphen.</p>
+  <header class="appbar">
+    <a class="brand" href="#exemplar"><img src="icons/wing.svg" alt="" width="26" height="26" />Wingmate</a>
+    <nav class="tabs" aria-label="Bereiche">
+      <a href="#exemplar" data-view="exemplar">Exemplar</a>
+      <a href="#ergebnis" data-view="ergebnis">Ergebnis</a>
+      <a href="#referenzen" data-view="referenzen">Referenzen <span class="count" id="refTabCount"></span></a>
+      <a href="#einstellungen" data-view="einstellungen">Einstellungen</a>
+    </nav>
+    <div class="appstatus">
+      <span id="pwaStatus" role="status">App läuft im Browser.</span>
+      <button id="updateApp" class="ghost small" hidden>Update laden</button>
+      <span id="updateHint" hidden>Neue Version bereit. Vorher ungespeicherte Arbeit sichern.</span>
     </div>
-    <div class="hero-badge" id="modeBadge">Fly-inspired MB</div>
   </header>
 
-  <aside class="pwa-bar" aria-label="App installieren und offline nutzen">
-    <span id="pwaStatus" role="status">App läuft im Browser.</span>
-    <button id="installApp" class="ghost" hidden>App installieren</button>
-    <span id="installHint">Installieren: im Browsermenü „App installieren“ oder auf iPhone/iPad „Teilen → Zum Home-Bildschirm“ wählen.</span>
-    <button id="updateApp" class="ghost" hidden>Update laden</button>
-    <span id="updateHint" hidden>Neue Version bereit. Vor dem Neuladen ungespeicherte Arbeit sichern.</span>
-  </aside>
-
-  <main class="layout">
-    <section class="card span2" id="captureCard" aria-labelledby="captureTitle"></section>
-
-    <section class="card span2">
-      <div class="section-head">
+  <main>
+    <!-- Exemplar: capture or load, check, landmarks -->
+    <section class="view" id="view-exemplar" data-view="exemplar" aria-labelledby="h-exemplar">
+      <div class="view-head">
         <div>
-          <div class="kicker">1 · INPUT</div>
-          <h2>Flügelbilder</h2>
+          <h1 id="h-exemplar">Exemplar</h1>
+          <p>Vorderflügel aufnehmen oder laden, prüfen, Landmarken setzen. Danach bestimmen oder als Referenz speichern.</p>
         </div>
-        <button class="ghost" id="clearImagesBtn">Bilder leeren</button>
+        <button class="ghost" id="clearImagesBtn">Neues Exemplar</button>
       </div>
-      <div class="input-grid">
-        <label class="dropzone" for="wipInput">
-          <input id="wipInput" type="file" accept="image/*" />
-          <canvas id="wipCanvas" width="640" height="420"></canvas>
-          <div class="dropcopy"><strong>WIP / Reflexionslicht</strong><span>Foto laden oder hineinziehen</span></div>
-        </label>
-        <label class="dropzone" for="venInput">
-          <input id="venInput" type="file" accept="image/*" />
-          <canvas id="venCanvas" width="640" height="420"></canvas>
-          <div class="dropcopy"><strong>Aderung / Durchlicht</strong><span>Foto laden oder hineinziehen</span></div>
-        </label>
-      </div>
-      <div class="statusline" id="imageStatus">Noch keine Bilder geladen.</div>
-    </section>
 
-    <section class="card span2" aria-labelledby="qcTitle">
-      <div class="kicker">1B · GEOMETRISCHE VORVERARBEITUNG</div>
-      <h2 id="qcTitle">Flügelnormalisierung &amp; Qualitätskontrolle</h2>
-      <p class="mini">1024 × 512 px · Schwerpunkt zentriert · Basis links · anterior oben. Beide Eingaben müssen denselben Vorderflügel zeigen. Die Originalseite separat dokumentieren und den Standard visuell bestätigen.</p>
-      <div class="buttonrow"><button id="qcRecalculate">Recalculate</button><button id="qcAccept" disabled>Accept</button><button id="qcRestore" class="ghost">Letztes Exemplar öffnen</button><button id="qcExport" class="ghost" disabled>Metadaten &amp; Maske exportieren</button><button id="qcLandmarkCsv" class="ghost" disabled>Landmarken CSV</button></div>
-      <label class="qc-check"><input id="qcDebug" type="checkbox"> Debug: Nebenachse und Bounding Box</label>
-      <p id="qcStatus" role="status" aria-live="polite">Noch keine Vorverarbeitung.</p>
-      <div id="qcImages"></div><div id="qcAlignment"></div>
-    </section>
-
-    <section class="card">
-      <div class="kicker">2 · RESERVOIR</div>
-      <h2>Drosophila-Rechenraum</h2>
-      <label>Modus
-        <select id="reservoirMode">
-          <option value="fly">FlyHash · Mushroom Body (Dasgupta et al. 2017)</option>
-          <option value="dense">Dichte Zufallsprojektion (LSH-Kontrolle)</option>
-          <option value="graph">Importierter FlyWire-Graph (explorativ)</option>
-          <option value="none">Kein Reservoir (Kontrolle)</option>
-        </select>
-      </label>
-      <div class="cols2">
-        <label>Kenyon-Zellen
-          <input id="reservoirSize" type="number" min="128" max="8192" step="128" value="2048" />
-        </label>
-        <label>Aktiv (% WTA)
-          <input id="activePct" type="number" min="1" max="30" step="1" value="5" />
-        </label>
-      </div>
-      <label>Input-Fan-in (binäre Synapsen je Kenyon-Zelle)
-        <input id="fanIn" type="number" min="1" max="30" step="1" value="6" />
-      </label>
-      <p class="mini">Eingabe wird auf den Referenzen z-standardisiert (zentriert), dünn und binär auf Kenyon-Zellen projiziert; Winner-take-all behält die aktivsten Zellen als binären Tag.</p>
-      <hr />
-      <label class="fileline">FlyWire-Subgraph importieren
-        <input id="graphInput" type="file" accept="application/json,.json" />
-      </label>
-      <div class="mini" id="graphStatus">Kein echter Graph geladen. Die Zuordnung Merkmal → Neuron ist willkürlich; der Graphmodus testet nur Topologie.</div>
-    </section>
-
-    <section class="card">
-      <div class="kicker">3 · REFERENZEN</div>
-      <h2>Bestimmte Exemplare</h2>
-      <label>Taxon / Art
-        <input id="speciesInput" type="text" placeholder="z. B. Andrena flavipes" />
-      </label>
-      <label>Exemplar-ID (optional; gleiche ID für linken/rechten Flügel desselben Tieres)
-        <input id="specimenInput" type="text" placeholder="z. B. Sammlungsnummer" />
-      </label>
-      <div class="buttonrow">
-        <button id="addReferenceBtn">Als Referenz speichern</button>
-        <button class="secondary" id="classifyBtn">Unbekanntes Tier klassifizieren</button>
-        <button class="ghost" id="validateBtn">Referenzen validieren</button>
-      </div>
-      <div class="buttonrow smallrow">
-        <button class="ghost" id="exportBtn">Referenzen exportieren</button>
-        <label class="ghost filebutton">Referenzen importieren<input id="referenceInput" type="file" accept="application/json,.json" /></label>
-        <button class="danger ghost" id="clearRefsBtn">Alle löschen</button>
-      </div>
-      <div class="reference-count" id="refCount">0 Referenzen</div>
-      <ul class="ref-list" id="refList"></ul>
-      <p class="status" id="refStatus" role="status" aria-live="polite"></p>
-    </section>
-
-    <section class="card span2 results-card">
-      <div class="section-head">
-        <div>
-          <div class="kicker">4 · OUTPUT</div>
-          <h2>Probabilistische Zuordnung</h2>
+      <section class="panel" aria-labelledby="h-images">
+        <h2 id="h-images">Bilder</h2>
+        <div class="input-grid">
+          <div class="slot">
+            <label class="dropzone" for="venInput">
+              <input id="venInput" type="file" accept="image/*" />
+              <canvas id="venCanvas" width="640" height="420"></canvas>
+              <span class="dropcopy"><strong>Aderung · Durchlicht</strong><span>für Umriss und Landmarken</span></span>
+            </label>
+            <div class="slot-actions">
+              <label class="button ghost" for="venInput">Foto wählen</label>
+              <button class="ghost" type="button" data-live="venation">Live-Kamera</button>
+            </div>
+          </div>
+          <div class="slot">
+            <label class="dropzone" for="wipInput">
+              <input id="wipInput" type="file" accept="image/*" />
+              <canvas id="wipCanvas" width="640" height="420"></canvas>
+              <span class="dropcopy"><strong>WIP · Auflicht, schwarzer Grund</strong><span>optional</span></span>
+            </label>
+            <div class="slot-actions">
+              <label class="button ghost" for="wipInput">Foto wählen</label>
+              <button class="ghost" type="button" data-live="wip">Live-Kamera</button>
+            </div>
+          </div>
         </div>
-        <div class="pill" id="openSetPill">open-set: —</div>
-      </div>
-      <div class="results-grid">
+        <p class="statusline" id="imageStatus">Noch keine Bilder.</p>
+        <section id="captureCard" class="camera-panel" hidden aria-labelledby="captureTitle"></section>
+      </section>
+
+      <section class="panel" aria-labelledby="qcTitle">
+        <div class="panel-head">
+          <h2 id="qcTitle">Prüfen &amp; Landmarken</h2>
+          <details class="more">
+            <summary>Weitere Aktionen</summary>
+            <div class="buttonrow smallrow">
+              <button id="qcRecalculate" class="ghost">Neu berechnen</button>
+              <button id="qcRestore" class="ghost">Letztes Exemplar öffnen</button>
+              <button id="qcExport" class="ghost" disabled>Metadaten &amp; Maske exportieren</button>
+              <button id="qcLandmarkCsv" class="ghost" disabled>Landmarken als CSV</button>
+              <label class="qc-check"><input id="qcDebug" type="checkbox" /> Achsen und Rahmen einblenden</label>
+            </div>
+          </details>
+        </div>
+        <p class="mini">Standardansicht: Basis links, Spitze rechts, Vorderrand oben. Venation und WIP müssen denselben Vorderflügel zeigen.</p>
+        <p id="qcStatus" role="status" aria-live="polite">Noch kein Bild geladen.</p>
+        <div id="qcImages"></div>
+        <div id="qcAlignment"></div>
+      </section>
+    </section>
+
+    <!-- Ergebnis: identification -->
+    <section class="view" id="view-ergebnis" data-view="ergebnis" aria-labelledby="h-ergebnis" hidden>
+      <div class="view-head">
         <div>
+          <h1 id="h-ergebnis">Ergebnis</h1>
           <p class="status" id="classifyStatus" role="status" aria-live="polite"></p>
-          <div id="resultBars" class="bars empty">Noch keine Klassifikation.</div>
-          <p class="prediction-set" id="predictionSet"></p>
+        </div>
+        <div class="pill" id="openSetPill">offene Menge: —</div>
+      </div>
+      <section class="panel results-card" aria-labelledby="h-graph">
+        <div class="results-grid">
+          <div>
+            <h2 id="h-graph">Ähnlichkeitsgraph (Random Walk)</h2>
+            <div id="resultBars" class="bars empty">Noch nichts bestimmt. Unter „Exemplar“ ein Bild prüfen, freigeben und „Bestimmen“ wählen.</div>
+            <p class="prediction-set" id="predictionSet"></p>
+          </div>
+          <dl class="metrics">
+            <div class="metric"><dt>Beste Ähnlichkeit</dt><dd id="simMetric">—</dd></div>
+            <div class="metric"><dt>Label-Entropie</dt><dd id="entropyMetric">—</dd></div>
+            <div class="metric"><dt>Graph-Knoten</dt><dd id="nodeMetric">—</dd></div>
+            <div class="metric"><dt>kNN (Top-1)</dt><dd id="knnMetric">—</dd></div>
+          </dl>
+        </div>
+      </section>
+      <details class="panel disclosure">
+        <summary>Einbettung ansehen</summary>
+        <canvas id="embeddingCanvas" width="1200" height="360"></canvas>
+        <p class="mini">Erste zwei Hauptkomponenten der Embeddings; keine phylogenetische Darstellung. Balken oben: Random-Walk-Masse je Taxon, geteilt durch dessen Referenzzahl; grün umrandet = im konformen Vorhersage-Set.</p>
+      </details>
+      <details class="panel disclosure" id="walkView">
+        <summary>Random Walk Schritt für Schritt</summary>
+        <p class="mini">40 Schritte auf dem Referenzgraphen, 20 % Restart zur Anfrage. Knotengröße und Tabelle zeigen die exakte Verteilung; orange ist ein beispielhafter Walk, gestrichelt ein Restart.</p>
+        <div class="buttonrow">
+          <button data-play disabled>Abspielen</button>
+          <button data-reset class="ghost" disabled>Zum Start</button>
+        </div>
+        <label><span data-counter>Schritt 0 / 40</span>
+          <input data-step type="range" min="0" max="40" value="0" step="1" aria-label="Random-Walk-Schritt" disabled />
+        </label>
+        <p data-status role="status">Nach einer Bestimmung erscheint hier der Walk.</p>
+        <svg data-graph viewBox="0 0 720 420" role="img" aria-label="Referenzgraph mit Wahrscheinlichkeiten und aktuellem Walk-Schritt"></svg>
+        <p class="mini" data-limit></p>
+        <div class="walk-table"><table>
+          <thead><tr><th scope="col">Knoten / Exemplar</th><th scope="col">Wahrscheinlichkeit</th><th scope="col">Walk</th></tr></thead>
+          <tbody data-nodes></tbody>
+        </table></div>
+      </details>
+    </section>
+
+    <!-- Referenzen & Training -->
+    <section class="view" id="view-referenzen" data-view="referenzen" aria-labelledby="h-referenzen" hidden>
+      <div class="view-head">
+        <div>
+          <h1 id="h-referenzen">Referenzen &amp; Training</h1>
+          <p>Sicher bestimmte Exemplare sind die Trainingsdaten. Neue Referenzen unter „Exemplar“ nach dem Freigeben speichern.</p>
+        </div>
+      </div>
+      <section class="panel" aria-labelledby="h-collection">
+        <div class="panel-head">
+          <h2 id="h-collection">Sammlung</h2>
+          <div class="buttonrow smallrow">
+            <button class="ghost" id="exportBtn">Exportieren</button>
+            <label class="ghost filebutton">Importieren<input id="referenceInput" type="file" accept="application/json,.json" /></label>
+            <button class="danger ghost" id="clearRefsBtn">Alle löschen</button>
+          </div>
+        </div>
+        <div class="reference-count" id="refCount">0 Referenzen</div>
+        <p class="status" id="refStatus" role="status" aria-live="polite"></p>
+        <details class="disclosure-inline">
+          <summary>Live-Verfahren prüfen (ohne Training)</summary>
+          <p class="mini">Gruppiertes Leave-one-out mit den aktuellen Einstellungen, jeweils ein Exemplar samt aller Flügel zurückgehalten.</p>
+          <button class="ghost" id="validateBtn">Prüfen</button>
           <div id="validation"></div>
-        </div>
-        <div class="metrics">
-          <div class="metric"><span>Beste morphologische Ähnlichkeit</span><strong id="simMetric">—</strong></div>
-          <div class="metric"><span>Label-Entropie</span><strong id="entropyMetric">—</strong></div>
-          <div class="metric"><span>Graph-Knoten</span><strong id="nodeMetric">—</strong></div>
-          <div class="metric"><span>kNN-Baseline (Top-1)</span><strong id="knnMetric">—</strong></div>
-          <div class="metric"><span>Random-Walk Schritte</span><strong>40</strong></div>
-        </div>
-      </div>
-      <canvas id="embeddingCanvas" width="1200" height="360"></canvas>
-      <p class="mini">Balken: Random-Walk-Masse je Taxon, korrigiert um die Zahl der Referenzen (sonst gewinnt das häufigste Taxon). Grün umrandet: im konformen Vorhersage-Set. Plot: erste zwei Hauptkomponenten der Embeddings, keine phylogenetische Darstellung.</p>
+        </details>
+      </section>
+      <section class="panel" id="trainingCard" aria-labelledby="trainingTitle"></section>
     </section>
 
-    <section class="card span2" id="walkView" aria-labelledby="walkTitle">
-      <div class="kicker">5 · MARKOV-KETTE</div>
-      <h2 id="walkTitle">Random-Walk erkunden</h2>
-      <p class="mini">40 Schritte auf dem Referenzgraphen · 20 % Restart-Wahrscheinlichkeit zur Anfrage. Knotengröße und Tabelle zeigen die exakte Wahrscheinlichkeitsverteilung. Orange markiert einen beispielhaften, gesampelten Walk; gestrichelt bedeutet Restart. Die Klassifikation aggregiert die Verteilung, nicht den einzelnen Walk; die Balken oben teilen diese Masse zusätzlich durch die Referenzzahl je Taxon.</p>
-      <div class="buttonrow">
-        <button data-play disabled>Abspielen</button>
-        <button data-reset class="ghost" disabled>Zum Start</button>
+    <!-- Einstellungen -->
+    <section class="view" id="view-einstellungen" data-view="einstellungen" aria-labelledby="h-einstellungen" hidden>
+      <div class="view-head">
+        <div>
+          <h1 id="h-einstellungen">Einstellungen</h1>
+          <p>Aufnahme-Rig, Rechenraum und App. Alles läuft lokal; Bilder verlassen das Gerät nicht.</p>
+        </div>
       </div>
-      <label><span data-counter>Schritt 0 / 40</span>
-        <input data-step type="range" min="0" max="40" value="0" step="1" aria-label="Random-Walk Schritt" disabled />
-      </label>
-      <p data-status role="status">Nach einer Klassifikation erscheinen hier die Markov-Walks.</p>
-      <svg data-graph viewBox="0 0 720 420" role="img" aria-label="Referenzgraph: Wahrscheinlichkeiten und aktueller Walk-Schritt"></svg>
-      <p class="mini" data-limit></p>
-      <div class="walk-table"><table>
-        <thead><tr><th scope="col">Knoten / Exemplar</th><th scope="col">Wahrscheinlichkeit</th><th scope="col">Walk</th></tr></thead>
-        <tbody data-nodes></tbody>
-      </table></div>
-    </section>
+      <section class="panel" id="rigCard" aria-labelledby="rigTitle"></section>
 
-    <section class="card span2">
-      <div class="kicker">METHODIK</div>
-      <h2>Was dieser MVP bereits testet</h2>
-      <div class="method-grid">
-        <div><strong>Form + WIP</strong><span>Umrissprofil der Maske; CIELAB je Zelle (8 × 4) + chroma-gewichtetes Farbtonhistogramm, nur Membranpixel</span></div>
-        <div><strong>Venation</strong><span>HOG-artige Gradientenorientierung + relative Dunkelheit je Zelle, beleuchtungsnormiert, ohne Konturrand</span></div>
-        <div><strong>Fly-Reservoir</strong><span>FlyHash: zentrieren, dünne binäre Expansion, Winner-take-all; dichte Projektion und „kein Reservoir“ als Kontrollen</span></div>
-        <div><strong>Taxonomie</strong><span>kNN-Graph + Random Walk with Restart; offene Menge über label-bedingte konforme Vorhersage</span></div>
-      </div>
-      <div class="warning"><strong>Wissenschaftlicher Hinweis:</strong> Methoden-Prototyp. Auf 814 realen <i>Bombus</i>-Landmarkdatensätzen erreicht der Graph-Klassifikator weniger als die Standardmethode Procrustes + LDA, und FlyHash schlägt die Kontrolle ohne Reservoir nicht (siehe <code>test-data/landmark-benchmark.json</code>). Aussagen über einen Vorteil des Fly-Rechenraums brauchen eigene, gruppierte Validierung gegen diese Baselines.</div>
+      <section class="panel" aria-labelledby="h-reservoir">
+        <div class="panel-head">
+          <h2 id="h-reservoir">Rechenraum (Reservoir)</h2>
+          <span id="modeBadge" hidden></span>
+        </div>
+        <label>Modus
+          <select id="reservoirMode">
+            <option value="fly">FlyHash · Mushroom Body (Dasgupta et al. 2017)</option>
+            <option value="dense">Dichte Zufallsprojektion (LSH-Kontrolle)</option>
+            <option value="graph">Importierter FlyWire-Graph (explorativ)</option>
+            <option value="none">Kein Reservoir (Kontrolle)</option>
+          </select>
+        </label>
+        <div class="cols3">
+          <label>Kenyon-Zellen
+            <input id="reservoirSize" type="number" min="128" max="8192" step="128" value="2048" />
+          </label>
+          <label>Aktiv (% WTA)
+            <input id="activePct" type="number" min="1" max="30" step="1" value="5" />
+          </label>
+          <label>Fan-in je Zelle
+            <input id="fanIn" type="number" min="1" max="30" step="1" value="6" />
+          </label>
+        </div>
+        <p class="mini">Merkmale werden auf den Referenzen standardisiert, dünn und binär auf Kenyon-Zellen projiziert; Winner-take-all behält die aktivsten Zellen. Gilt für die Live-Bestimmung und neues Training.</p>
+        <div class="buttonrow">
+          <label class="ghost filebutton">FlyWire-Subgraph importieren<input id="graphInput" type="file" accept="application/json,.json" /></label>
+        </div>
+        <p class="mini" id="graphStatus">Kein Graph geladen. Die Zuordnung Merkmal → Neuron ist willkürlich; der Graphmodus testet nur Topologie.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="h-app">
+        <h2 id="h-app">App</h2>
+        <p class="mini" id="installHint">Installieren: im Browsermenü „App installieren“ oder auf iPhone/iPad „Teilen → Zum Home-Bildschirm“.</p>
+        <button id="installApp" class="ghost" hidden>App installieren</button>
+        <span id="footerState" hidden></span>
+      </section>
+
+      <section class="panel" aria-labelledby="h-method">
+        <h2 id="h-method">Methodik</h2>
+        <dl class="method-list">
+          <dt>Form &amp; WIP</dt><dd>Umrissprofil der Maske; CIELAB je Zelle (8 × 4) und chroma-gewichtetes Farbtonhistogramm, nur Membranpixel.</dd>
+          <dt>Venation</dt><dd>Gradientenorientierung und relative Dunkelheit je Zelle, beleuchtungsnormiert, ohne Konturrand.</dd>
+          <dt>Landmarken</dt><dd>19 Landmarken, Procrustes-Ausrichtung, Hauptkomponenten und LDA mit kalibrierten Wahrscheinlichkeiten.</dd>
+          <dt>Fly-Reservoir</dt><dd>FlyHash (zentrieren, dünne binäre Expansion, Winner-take-all); dichte Projektion und „kein Reservoir“ als Kontrollen.</dd>
+          <dt>Bestimmung</dt><dd>kNN-Graph mit Random Walk with Restart; unbekannte Arten über label-bedingte konforme Vorhersage.</dd>
+        </dl>
+        <p class="warning">Methoden-Prototyp. Auf 814 realen <i>Bombus</i>-Flügeln ist Procrustes + LDA besser als der Graph-Klassifikator, und FlyHash schlägt die Kontrolle ohne Reservoir nicht (<code>test-data/landmark-benchmark.json</code>).</p>
+      </section>
     </section>
   </main>
 
-  <footer>
-    <span>Alles läuft lokal im Browser. Bilder werden nicht hochgeladen.</span>
-    <span id="footerState">Ready.</span>
-  </footer>
+  <!-- Next step for the current specimen -->
+  <div class="nextbar" id="nextBar" role="region" aria-label="Nächster Schritt">
+    <form class="refform" id="refForm" hidden>
+      <h2>Als Referenz speichern</h2>
+      <label>Art (sicher bestimmt)
+        <input id="speciesInput" type="text" placeholder="z. B. Andrena flavipes" autocomplete="off" />
+      </label>
+      <div class="cols3">
+        <label>Exemplar-ID
+          <input id="specimenInput" type="text" placeholder="gleich für L/R-Flügel" />
+        </label>
+        <label>Geschlecht
+          <select id="sexInput"><option value="">unbekannt</option><option value="F">Weibchen</option><option value="M">Männchen</option></select>
+        </label>
+        <label>Serie / Fundort
+          <input id="seriesInput" type="text" placeholder="z. B. Wiese Nord 2026" />
+        </label>
+      </div>
+      <div class="buttonrow">
+        <button id="addReferenceBtn" type="submit">Referenz speichern</button>
+        <button id="refCancel" type="button" class="ghost">Abbrechen</button>
+      </div>
+      <p class="status" id="refFormStatus" role="status" aria-live="polite"></p>
+    </form>
+    <div class="nextbar-inner">
+      <ol class="steps" id="flowSteps" aria-label="Fortschritt">
+        <li data-step="image">Bild</li>
+        <li data-step="qc">Geprüft</li>
+        <li data-step="landmarks">Landmarken <span id="lmCount"></span></li>
+      </ol>
+      <p class="nextbar-hint" id="nextHint" role="status" aria-live="polite">Venationsbild laden oder mit der Live-Kamera aufnehmen.</p>
+      <div class="nextbar-actions">
+        <button id="qcAccept" disabled hidden>Freigeben</button>
+        <button id="refToggle" class="ghost" type="button" hidden aria-expanded="false" aria-controls="refForm">Als Referenz …</button>
+        <button id="classifyBtn" hidden>Bestimmen</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="app.js"></script>
   <script type="module" src="imaging/qc-ui.js"></script>
   <script type="module" src="imaging/camera.js"></script>
+  <script type="module" src="shell.js"></script>
   <script type="module" src="pwa.js"></script>
 </body>
 </html>

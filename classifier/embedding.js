@@ -57,9 +57,21 @@ export function fitStandardizer(records, blocks) {
     }
     offset += l.dim;
   }
+  return standardizerFromParams({
+    layout,
+    mean: Float32Array.from(mean),
+    sd: Float32Array.from(sd),
+    weight: Float32Array.from(weight),
+  });
+}
+// Rebuild a fitted standardizer from its (serialisable) parameters.
+export function standardizerFromParams(params) {
+  const { layout, mean, sd, weight } = params,
+    dim = layout.reduce((s, l) => s + l.dim, 0);
   return {
     layout,
     dim,
+    params,
     transform(record) {
       const v = concat(record, layout),
         out = new Float32Array(dim);

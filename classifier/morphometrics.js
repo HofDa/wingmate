@@ -155,8 +155,14 @@ export function fitLDA(X, labels, { shrinkage = "auto" } = {}) {
       const w = solve(l, d, means[t]);
       let b = 0;
       for (let j = 0; j < d; j++) b += w[j] * means[t][j];
-      return { taxon: t, w, bias: -0.5 * b };
+      return { taxon: t, w: Float32Array.from(w), bias: -0.5 * b };
     });
+  return ldaFromParams({ taxa, shrinkage, discriminants: model });
+}
+// Rebuild a fitted LDA from its (serialisable) parameters.
+export function ldaFromParams(params) {
+  const { taxa, shrinkage, discriminants: model } = params,
+    d = model[0].w.length;
   const scores = (x) =>
     model.map(({ taxon, w, bias }) => {
       let s = bias;
@@ -166,6 +172,7 @@ export function fitLDA(X, labels, { shrinkage = "auto" } = {}) {
   return {
     taxa,
     shrinkage,
+    params,
     scores: (x) => Object.fromEntries(scores(x)),
     predict(x) {
       let best = null,
@@ -243,11 +250,19 @@ export function pcaBasis(X, k) {
   for (const x of X)
     for (let a = 0; a < d; a++) for (let b = a; b < d; b++) cov[a * d + b] += ((x[a] - mean[a]) * (x[b] - mean[b])) / Math.max(1, n - 1);
   for (let a = 0; a < d; a++) for (let b = 0; b < a; b++) cov[a * d + b] = cov[b * d + a];
-  const { values, vectors } = symmetricEigen(cov, d),
-    basis = vectors.slice(0, k);
+  const { values, vectors } = symmetricEigen(cov, d);
+  return pcaFromParams({
+    mean: Float32Array.from(mean),
+    basis: vectors.slice(0, k).map((v) => Float32Array.from(v)),
+    explained: values.slice(0, k).reduce((a, b) => a + b, 0) / (values.reduce((a, b) => a + Math.max(0, b), 0) || 1),
+  });
+}
+export function pcaFromParams(params) {
+  const { mean, basis, explained } = params;
   return {
     k: basis.length,
-    explained: values.slice(0, k).reduce((a, b) => a + b, 0) / (values.reduce((a, b) => a + Math.max(0, b), 0) || 1),
+    explained,
+    params,
     project: (x) => basis.map((w) => w.reduce((s, wj, j) => s + wj * (x[j] - mean[j]), 0)),
   };
 }
@@ -265,13 +280,22 @@ export function fitShapeLDA(X, labels, { components = "auto", shrinkage = "auto"
     k = components === "auto" ? ldaComponents(X.length, taxa, X[0].length) : components,
     pca = pcaBasis(X, k),
     lda = fitLDA(X.map(pca.project), labels, { shrinkage });
+  return shapeLDAFromParams({ pca: pca.params, lda: lda.params, temperature: null });
+}
+// Rebuild PCA + LDA (+ optional temperature) from serialisable parameters.
+export function shapeLDAFromParams(params) {
+  const pca = pcaFromParams(params.pca),
+    lda = ldaFromParams(params.lda),
+    temperature = params.temperature ?? null;
   return {
     ...lda,
+    params,
+    temperature,
     components: pca.k,
     explainedVariance: pca.explained,
     scores: (x) => lda.scores(pca.project(x)),
     predict: (x) => lda.predict(pca.project(x)),
-    predictProba: (x) => lda.predictProba(pca.project(x)),
+    predictProba: (x) => softmax(lda.scores(pca.project(x)), temperature ?? 1),
   };
 }
 export function softmax(scores, temperature = 1) {
@@ -311,12 +335,12 @@ export function fitCalibratedShapeLDA(X, labels, groups, options = {}) {
     }),
     usable = loo.filter(Boolean).length,
     temperature = usable >= 4 ? fitTemperature(loo, labels) : null;
-  return {
-    ...model,
-    temperature,
-    calibrationQueries: usable,
-    predictProba: (x) => softmax(model.scores(x), temperature ?? 1),
-  };
+  return { ...shapeLDAFromParams({ ...model.params, temperature }), calibrationQueries: usable };
+}
+// Ordinary Procrustes: align one configuration to a fixed mean shape (used
+// by a frozen model, whose reference consensus must not move).
+export function alignToMean(config, mean) {
+  return rotateOnto(centreAndScale(config).shape, mean);
 }
 
 // First two principal components (power iteration with deflation), used only

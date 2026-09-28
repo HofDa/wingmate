@@ -30,6 +30,7 @@ const { chromium } = require("playwright");
     await page.click("#qcAccept");
     await page.waitForFunction(() => window.wingQC.items.venation?.accepted);
     if (species) {
+      await page.click("#refToggle");
       await page.fill("#speciesInput", species);
       await page.fill("#specimenInput", file.replace(/-[LR]\.dw\.png$/, ""));
       await page.click("#addReferenceBtn");
@@ -74,6 +75,10 @@ const { chromium } = require("playwright");
   result.walkTop = await page.evaluate(() =>
     [...document.querySelectorAll("#walkView [data-nodes] tr")].slice(0, 3).map((r) => r.textContent),
   );
+  await page.evaluate(() => {
+    window.wingShell.show("referenzen");
+    document.querySelector("#validateBtn").closest("details").open = true;
+  });
   await page.click("#validateBtn");
   result.validation = await page.evaluate(() =>
     [...document.querySelectorAll("#validation tbody tr")].map((r) => r.textContent),

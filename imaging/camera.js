@@ -24,7 +24,8 @@ import {
   deserializeRig,
 } from "./rig-store.js";
 
-const root = document.querySelector("#captureCard");
+const root = document.querySelector("#captureCard"),
+  rigRoot = document.querySelector("#rigCard");
 // Settings that define the optical/radiometric state and are locked + stored in the rig.
 const LOCKABLE = [
   ["focusMode", "focusDistance", "Fokus"],
@@ -78,66 +79,81 @@ for (const n of [1, 4, 8, 16]) ui.frames.add(new Option(n === 1 ? "1 Frame" : `M
 ui.frames.value = 4;
 ui.target.onchange = () => (bestSharpness = 0);
 
-function nativeInput(type, label) {
-  const input = el("input", { type: "file", accept: "image/*", hidden: true });
-  input.setAttribute("capture", "environment");
-  input.onchange = () => {
-    if (input.files[0])
-      window.wingQC.load(type, input.files[0], { method: "native-camera-app", note: "Kameraeinstellungen nicht kontrolliert" });
-    input.value = "";
-  };
-  return el("label", { className: "ghost filebutton" }, label, input);
-}
-
-const preview = el("div", { className: "cam-preview" }, ui.video, ui.overlay);
-root.append(
-  el("div", { className: "kicker", textContent: "0 · AUFNAHME" }),
-  el("h2", { id: "captureTitle", textContent: "Smartphone-Kamera & Rig" }),
-  el(
-    "p",
-    { className: "mini" },
-    "Flügel im Rig in den Rahmen legen: Basis links, Spitze rechts, Vorderrand oben. Kamera über HTTPS öffnen (siehe README). Auf Android-Chrome werden Fokus, Belichtung und Weißabgleich fixiert; iOS Safari erlaubt das nicht – dort sichern Rig-Profil und Driftprüfung die Vergleichbarkeit.",
-  ),
-  el(
-    "div",
-    { className: "buttonrow" },
-    button("Kamera starten", start, ""),
-    button("Stop", stop),
-    ui.device,
-    ui.target,
-    ui.frames,
-    button("Aufnehmen → QC", captureSpecimen, "secondary"),
-  ),
-  el("div", { className: "buttonrow smallrow" }, nativeInput("venation", "Native Kamera: Venation"), nativeInput("wip", "Native Kamera: WIP")),
-  el("div", { className: "cam-layout" }, preview, el("div", {}, ui.meters, el("details", { open: true }, el("summary", { textContent: "Kameraeinstellungen" }), ui.controls))),
-  ui.status,
-  el("hr"),
-  el("h3", { textContent: "Rig-Profil" }),
-  el(
-    "div",
-    { className: "buttonrow" },
-    ui.rigSelect,
-    button("Exportieren", exportRig),
-    el("label", { className: "ghost filebutton" }, "Importieren", el("input", { type: "file", accept: "application/json,.json", hidden: true, onchange: importRig })),
-    button("Löschen", removeRig, "ghost danger"),
-  ),
-  ui.rigInfo,
-  el(
+const preview = el("div", { className: "cam-preview" }, ui.video, ui.overlay),
+  calibration = el(
     "details",
-    {},
-    el("summary", { textContent: "Neues Rig kalibrieren" }),
+    { className: "disclosure-inline cam-calibration" },
+    el("summary", { textContent: "Rig kalibrieren" }),
     el(
       "p",
       { className: "mini" },
-      "Rig montiert, Licht an, Kamera mit den späteren Einstellungen fixiert. Jede Hintergrundaufnahme mittelt 16 Frames. Das Profil gilt nur für genau diese Auflösung, Zoomstufe und Beleuchtung.",
+      "Rig montiert, Licht an, Kamera fixiert. Jede Hintergrundaufnahme mittelt 16 Frames. Das Profil gilt nur für genau diese Auflösung, Zoomstufe und Beleuchtung.",
     ),
-    el("label", {}, "Name", ui.rigName),
+    el("label", {}, "Name des Rigs", ui.rigName),
     ui.steps,
     ui.scaleCanvas,
     el("label", {}, "Abstand der zwei Maßstabspunkte (mm)", ui.scaleMm),
     el("div", { className: "buttonrow" }, button("Rig speichern & aktivieren", saveDraft, "")),
+  );
+root.append(
+  el(
+    "div",
+    { className: "panel-head" },
+    el("h3", { id: "captureTitle", textContent: "Live-Kamera" }),
+    button("Schließen", closePanel),
+  ),
+  el(
+    "p",
+    { className: "mini" },
+    "Flügel in den Rahmen legen: Basis links, Spitze rechts, Vorderrand oben. Android-Chrome fixiert Fokus, Belichtung und Weißabgleich; iOS Safari erlaubt das nicht – dort sichern Rig-Profil und Driftprüfung die Vergleichbarkeit.",
+  ),
+  el(
+    "div",
+    { className: "buttonrow cam-toolbar" },
+    el("label", { className: "inline" }, "Bild für", ui.target),
+    el("label", { className: "inline" }, "Mittelung", ui.frames),
+    el("label", { className: "inline" }, "Kamera", ui.device),
+    button("Kamera starten", start),
+    button("Aufnehmen", captureSpecimen, ""),
+  ),
+  el("div", { className: "cam-layout" }, preview, el("div", {}, ui.meters, el("details", { className: "disclosure-inline" }, el("summary", { textContent: "Kameraeinstellungen" }), ui.controls))),
+  ui.status,
+  calibration,
+);
+// Rig management lives under Einstellungen; calibration needs the camera and
+// therefore opens the live panel.
+rigRoot.append(
+  el("div", { className: "panel-head" }, el("h2", { id: "rigTitle", textContent: "Aufnahme-Rig" })),
+  el("p", { className: "mini", textContent: "Ein kalibriertes Rig korrigiert Licht und Farbe, erkennt Staub und Drift und misst die Flügelgröße in mm." }),
+  el(
+    "div",
+    { className: "buttonrow" },
+    el("label", { className: "inline grow" }, "Aktives Rig", ui.rigSelect),
+    button("Mit der Live-Kamera kalibrieren", () => openPanel(ui.target.value, { calibrate: true }), ""),
+  ),
+  ui.rigInfo,
+  el(
+    "div",
+    { className: "buttonrow smallrow" },
+    button("Exportieren", exportRig),
+    el("label", { className: "ghost filebutton" }, "Importieren", el("input", { type: "file", accept: "application/json,.json", hidden: true, onchange: importRig })),
+    button("Löschen", removeRig, "ghost danger"),
   ),
 );
+function openPanel(target, { calibrate = false } = {}) {
+  window.wingShell?.show("exemplar");
+  root.hidden = false;
+  if (target) ui.target.value = target;
+  bestSharpness = 0;
+  calibration.open = calibrate;
+  root.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!stream) start();
+}
+function closePanel() {
+  stop();
+  root.hidden = true;
+}
+for (const b of document.querySelectorAll("[data-live]")) b.addEventListener("click", () => openPanel(b.dataset.live));
 
 // ---------- camera ----------
 const message = (text, kind = "info") => {
@@ -333,7 +349,7 @@ function captureSpecimen() {
       settings: settingsSnapshot(),
       rigProfileId: rig?.id ?? null,
     });
-    message(`Aufnahme (${avg.image.width}×${avg.image.height}, ${avg.frames} Frames) an die QC übergeben.`, "ok");
+    message(`Aufnahme (${avg.image.width}×${avg.image.height}, ${avg.frames} Frames) übernommen – unten prüfen.`, "ok");
   });
 }
 
@@ -561,4 +577,4 @@ async function removeRig() {
 window.addEventListener("wing-rig-change", refreshRigs);
 renderSteps();
 refreshRigs();
-window.wingCamera = { start, stop, grab, draft, applySettings };
+window.wingCamera = { start, stop, grab, draft, applySettings, openPanel };

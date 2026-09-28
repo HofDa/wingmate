@@ -1,9 +1,10 @@
 import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import vm from 'node:vm';
 
 const root = new URL('../', import.meta.url);
 const output = new URL('_site/', root);
-const assets = ['index.html', 'styles.css', 'app.js', 'walk.js', 'pwa.js',
+const assets = ['index.html', 'styles.css', 'app.js', 'walk.js', 'pwa.js', 'shell.js', 'training.js',
   'sw.js', 'manifest.webmanifest', 'icons', 'classifier', 'imaging'];
 
 // Refuse to reuse a nonempty output directory, preventing stale files from shipping.
@@ -24,6 +25,12 @@ await fingerprint(output);
 const version = `pages-${hash.digest('hex').slice(0, 16)}`;
 const swFile = new URL('sw.js', output);
 const sw = await readFile(swFile, 'utf8');
+const cachedFiles = vm.runInNewContext(`${sw}\nAPP_FILES`, {
+  self: { registration: { scope: 'https://example.test/wingmate/' }, addEventListener() {} }, URL,
+});
+for (const file of cachedFiles) {
+  if (file !== './') await readFile(new URL(file, output));
+}
 if (!/const VERSION = '[^']+';/.test(sw)) throw Error('Cannot locate the service worker cache version.');
 await writeFile(swFile, sw.replace(/const VERSION = '[^']+';/, `const VERSION = '${version}';`));
 await writeFile(new URL('.nojekyll', output), '');

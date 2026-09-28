@@ -1,15 +1,17 @@
 // Local specimen archive. Original File objects, masks, transforms and normalized
 // RGBA arrays are stored together, so manual corrections remain reproducible.
-// Version 2 adds calibrated rig profiles next to the specimen archive.
+// Version 2 adds calibrated rig profiles, version 3 trained models.
 export function database() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open("bee-wing-preprocessing", 2);
+    const request = indexedDB.open("bee-wing-preprocessing", 3);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains("specimens"))
         db.createObjectStore("specimens", { keyPath: "id" });
       if (!db.objectStoreNames.contains("rigs"))
         db.createObjectStore("rigs", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("models"))
+        db.createObjectStore("models", { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);

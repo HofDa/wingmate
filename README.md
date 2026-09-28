@@ -38,6 +38,23 @@ Für das **Smartphone** (Kamera braucht HTTPS) im selben WLAN:
 npm run serve:https     # druckt https://<LAN-IP>:8443; Zertifikatswarnung einmal bestätigen
 ```
 
+## Bedienung
+
+Die App hat vier Bereiche (unten am Handy, oben am Desktop):
+
+- **Exemplar** – Venation (und optional WIP) per **Foto wählen** (am Handy: Kamera oder Galerie)
+  oder **Live-Kamera** laden, dann unter **Prüfen & Landmarken** Maske und Orientierung prüfen
+  (*Um 180° drehen*, *Spiegeln*, *Standard geprüft*) und Landmarken setzen. Seltenes liegt
+  eingeklappt unter *Maske korrigieren*, *Export & Metadaten* und *Weitere Aktionen*.
+- **Ergebnis** – Bestimmung (Ähnlichkeitsgraph, Procrustes + LDA, offene Menge); Einbettung und
+  Random Walk eingeklappt.
+- **Referenzen** – Sammlung (Export/Import), Live-Prüfung und **Modell trainieren**.
+- **Einstellungen** – Aufnahme-Rig, Rechenraum/FlyWire, App-Installation, Methodik.
+
+Die Leiste am unteren Rand zeigt für das aktuelle Exemplar den Stand (Bild · Geprüft · Landmarken)
+und genau den nächsten Schritt: **Freigeben**, danach **Bestimmen** oder **Als Referenz …**
+(Art, Exemplar-ID, Geschlecht, Serie/Fundort).
+
 ## Als PWA installieren und offline nutzen
 
 Die App enthält ein Web-App-Manifest, Installationsicons und einen Service Worker. Nach dem ersten vollständigen Online-Aufruf meldet die Leiste **Offline bereit**. Danach funktionieren App-Start, lokale Bildverarbeitung, Klassifikation und Markov-Walks auch ohne Netzwerk. Referenzen bleiben im bestehenden `localStorage`, archivierte Exemplare in IndexedDB. Die Installation migriert keine Daten zwischen Browsern oder Geräten; Referenzen weiterhin regelmäßig exportieren.
@@ -61,7 +78,7 @@ Nach einer Klassifikation zeigt **Random-Walk erkunden** die Markov-Kette auf de
 
 ## Step 0 · Smartphone-Aufnahme & Rig (rig-profile-1)
 
-Die Karte **0 · Aufnahme** (`imaging/camera.js`) nimmt direkt mit der Rückkamera auf: Live-Vorschau mit
+**Live-Kamera** an einem Bildfeld (`imaging/camera.js`) nimmt direkt mit der Rückkamera auf: Live-Vorschau mit
 Platzierungsrahmen (Basis links, Spitze rechts, anterior oben), Fokus-, Überbelichtungs- und
 Rig-Abweichungsanzeige, Mittelung über 1–16 Frames (Rauschen ∝ 1/√N) und verlustfreie PNG-Übergabe
 an die QC. Aufnahmemetadaten (Frames, Rauschen, Kameraeinstellungen, Rig-ID) werden mitarchiviert.
@@ -70,14 +87,14 @@ an die QC. Aufnahmemetadaten (Frames, Rauschen, Kameraeinstellungen, Rig-ID) wer
   die Kamera sie anbietet – nach dem Einpendeln mit **Aktuelle Einstellungen fixieren** gesperrt, im
   Rig gespeichert und beim nächsten Start automatisch mit exakt derselben Auflösung wieder angewendet.
 - **iPhone (Safari):** Web-Seiten erhalten keine manuelle Kamerasteuerung. Live-Aufnahme funktioniert,
-  aber mit Automatik; alternativ **Native Kamera** (volle Auflösung, in der Kamera-App AE/AF-Sperre
+  aber mit Automatik; alternativ **Foto wählen** → Kamera-App (volle Auflösung, dort AE/AF-Sperre
   durch langes Tippen). Die Driftprüfung meldet dann abweichende Belichtung. iOS wechselt im
   Nahbereich teils automatisch das Objektiv; das verändert Maßstab und Licht – Profil erkennt das
   nur über Drift/Größe, daher Makro-Vorsatz fest auf die Hauptkamera.
 
 ### Rig kalibrieren
 
-Unter **Neues Rig kalibrieren**, mit montiertem Rig, eingeschaltetem Licht und fixierter Kamera:
+Unter **Rig kalibrieren** im Live-Kamera-Bereich (oder *Einstellungen → Mit der Live-Kamera kalibrieren*), mit montiertem Rig, eingeschaltetem Licht und fixierter Kamera:
 
 1. **Venation-Hintergrund** – leerer Objektträger im Durchlicht (16 Frames gemittelt).
 2. **WIP-Hintergrund** – leer, schwarzer Hintergrund, Auflicht.
@@ -132,10 +149,10 @@ In der QC-Karte des Venation-Bildes (ohne Venation: WIP) öffnet **Landmarken** 
   Punkten werden starke Abweichungen orange markiert (typisch: vertauschte Nummern).
 - **Fehlt (beschädigt)** markiert eine nicht bestimmbare Landmarke; unvollständige Sätze gehen
   nicht in die Klassifikation ein.
-- Gespeichert wird in **Originalpixeln**; die Punkte bleiben bei Flip/Mirror/Schwelle/Neuberechnung
-  gültig. Ins Archiv (IndexedDB), in den JSON-Export und als **Landmarken CSV**
+- Gespeichert wird in **Originalpixeln**; die Punkte bleiben bei Drehen/Spiegeln/Schwelle/Neuberechnung
+  gültig. Ins Archiv (IndexedDB), in den JSON-Export und als **Landmarken als CSV** (*Weitere Aktionen*)
   (`file,x1,y1,…`, y nach unten; `landmarksCsv(…, {yUp: true})` für die Konvention des Datensatzes)
-  für MorphoJ/geomorph. Änderungen nach **Accept** heben die Freigabe auf.
+  für MorphoJ/geomorph. Änderungen nach **Freigeben** heben die Freigabe auf.
 
 **Schema** `bombus-19`: die 19 Landmarken des Molasy-&-Tofilski-Datensatzes (IdentiFly-Nummerierung).
 Die Führung ist das Procrustes-Mittel aller 814 Flügel, nachgerechnet in `tests/landmarks.test.js`.
@@ -144,7 +161,7 @@ nur so auf Aderkreuzungen). Für Gattungen mit anderer Aderung (z. B. 2 Submargi
 eigenes Schema nötig; Blöcke verschiedener Schemata werden nie verglichen.
 
 **Klassifikation**: Vollständige Landmarken eines *orientierungsbestätigten* Bildes werden zum Block
-`landmarks` (Standardansicht, damit linke und rechte Flügel nach Mirror vergleichbar sind –
+`landmarks` (Standardansicht, damit linke und rechte Flügel nach dem Spiegeln vergleichbar sind –
 Procrustes entfernt keine Spiegelung). Haben alle Referenzen Landmarken desselben Schemas, zeigt die
 Ausgabe zusätzlich **Procrustes + LDA**: GPA (ohne Labels, inkl. Abfrage) → Hauptkomponenten
 (bei wenigen Exemplaren höchstens (n − Taxa)/2) → LDA mit Ledoit–Wolf-Schrumpfung →
@@ -154,6 +171,26 @@ die LDA-Zeile zuerst. LDA wählt immer ein bekanntes Taxon; für Unbekannte gilt
 Warum kalibrieren: Unkalibriert nennt LDA auf den *Bombus*-Daten mit 3–10 Exemplaren/Art im Mittel
 95–98 % Sicherheit, liegt aber nur zu 67–83 % richtig. Kalibriert (3 / 5 / 10 Exemplare): angegeben
 58 / 67 / 77 %, tatsächlich 66 / 72 / 83 % richtig; Brier-Score jeweils besser.
+
+## Training (Modell einfrieren)
+
+Unter **Referenzen → Modell trainieren** (`classifier/model.js`, läuft im Worker):
+
+1. **Bereitschaft** je Art: Exemplare, Flügel, Landmarken, Geschlecht, Serien; Warnung bei
+   < 10 Exemplaren, nur einem Geschlecht oder nur einer Serie/Fundort.
+2. **Trainieren** passt Standardisierung, Reservoir-Einbettung, offene Menge und – wenn alle
+   Referenzen Landmarken haben – Procrustes-Mittelform, PCA, LDA und Temperaturkalibrierung einmal an.
+3. **Bewertung** aller Verfahren mit denselben stratifizierten, nach Exemplar gruppierten
+   5 Falten; das beste (balancierte Genauigkeit) wird Standard. Haben alle Referenzen eine Serie,
+   zusätzlich **Transfer auf ungesehene Serien** (jeweils eine Serie zurückgehalten).
+4. Das Modell wird gespeichert (IndexedDB), ist exportier-/importierbar (`wingmate-model-1`,
+   JSON) und bestimmt, solange aktiv, alle neuen Tiere; neue Flügel richtet es per Procrustes an
+   der gespeicherten Mittelform aus. Geänderte Referenzen werden angezeigt – dann neu trainieren.
+
+Warum Serien/Geschlecht zählen (Bombus-Landmarken, *lucorum* vs. *terrestris*): Referenzen aus
+**einer** Sammlung ergaben 100 % in der Kreuzvalidierung, aber 70 % auf den anderen Sammlungen;
+nur Weibchen kosteten auf Männchen etwa 6 Punkte (92 % vs. 86 %). Die Kreuzvalidierung sagt nur
+voraus, was die Referenzen abdecken (`tests/model.test.js`).
 
 ## Echte FlyWire-Daten
 
@@ -234,6 +271,7 @@ npm test                                           # Node: Normalisierung, Klass
 NODE_PATH=… node scripts/classifier-e2e.cjs        # Browser: QC → Referenzen → Klassifikation → Walk → Validierung
 NODE_PATH=… node scripts/camera-e2e.cjs            # Browser, Fake-Kamera: Rig kalibrieren → Neustart → Aufnahme → QC
 NODE_PATH=… node scripts/landmark-e2e.cjs          # Browser, 7 reale Flügel: 19 Landmarken per UI, Lupe, LDA, CSV
+NODE_PATH=… node scripts/training-e2e.cjs          # Browser: Training im Worker, Bericht, Modell bestimmen, Export/Import
 ```
 
 Der Landmarken-E2E klickt die publizierten Landmarken durch die Oberfläche, prüft den exakten
@@ -269,13 +307,13 @@ npm test
 
 Venation und/oder WIP hineinziehen. Die QC zeigt Original, echte Binärmaske,
 normalisiertes Bild und Kontur/PCA/Schwerpunkt/Basis-/Spitzenkandidaten.
-`Flip 180°` und `Mirror` korrigieren die Orientierung. Originalseite separat
-angeben; vor `Accept` bestätigen: Basis links, Spitze rechts, anterior oben.
+*Um 180° drehen* und *Spiegeln* korrigieren die Orientierung. Originalseite separat
+angeben; vor *Freigeben* bestätigen: Basis links, Spitze rechts, Vorderrand oben.
 Schwelle ändern oder eine extern korrigierte Schwarzweißmaske importieren,
 wenn die automatische Segmentierung nicht ausreicht. `Reset` verwirft die
 Korrekturen, erhält aber die dokumentierte Originalseite.
 
-`Accept` archiviert Originaldateien, Masken, normalisierte RGBA-Bilder und
+*Freigeben* archiviert Originaldateien, Masken, normalisierte RGBA-Bilder und
 Metadaten lokal in IndexedDB. `Letztes Exemplar öffnen` lädt sie erneut zur QC.
 PNG- und JSON-Exporte sind portable Ergebnisse; Browserdaten können vom Benutzer
 oder Browser gelöscht werden. JSON enthält auch die Analysemaske als binäre

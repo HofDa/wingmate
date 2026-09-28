@@ -85,11 +85,11 @@ const waitStatus = (page, text) =>
     wing = y4m(path.join(tmp, "wing.y4m"), true);
 
   const calibration = await session(empty, async (page) => {
-    await page.click("text=Kamera starten");
+    await page.click('[data-live="venation"]');
     await waitStatus(page, "Kamera aktiv");
     await page.waitForTimeout(800);
     const meters = await page.evaluate(() => document.querySelector(".cam-meters").textContent);
-    await page.click("#captureCard details:not([open]) summary");
+    await page.click("#captureCard .cam-calibration summary");
     await page.locator("#captureCard .cam-steps li").first().locator("button").click();
     await waitStatus(page, "Kalibrieraufnahme gespeichert");
     // Ruler step: set the two points programmatically (400 px = 2 mm at 5 µm/px).
@@ -101,18 +101,16 @@ const waitStatus = (page, text) =>
     await page.fill("#captureCard input[type=text]", "E2E-Rig");
     await page.click("text=Rig speichern & aktivieren");
     await waitStatus(page, "gespeichert und aktiviert");
-    return {
-      meters,
-      rigInfo: await page.evaluate(() => document.querySelector("#captureCard .mini:not(.status)") && [...document.querySelectorAll("#captureCard p.mini")].at(-2).textContent),
-    };
+    await page.evaluate(() => window.wingShell.show("einstellungen"));
+    return { meters, rigInfo: await page.textContent("#rigCard p.mini:nth-of-type(2)") };
   });
 
   const capture = await session(wing, async (page) => {
-    await page.click("text=Kamera starten");
+    await page.click('[data-live="venation"]');
     await waitStatus(page, "Kamera aktiv");
     await page.waitForTimeout(800);
-    await page.selectOption("#captureCard select >> nth=1", "venation");
-    await page.click("text=Aufnehmen → QC");
+    await page.selectOption("#captureCard select >> nth=0", "venation");
+    await page.click('#captureCard .cam-toolbar button:has-text("Aufnehmen")');
     await page.waitForFunction(() => window.wingQC.items.venation?.result, null, { timeout: 60000 });
     return page.evaluate(({ W, H }) => {
       const item = window.wingQC.items.venation,
