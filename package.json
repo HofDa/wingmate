@@ -1,0 +1,10 @@
+{
+  "name": "bee-fly-connectome",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "serve": "python3 -m http.server 8000",
+    "serve:https": "python3 scripts/serve-https.py"
+  }
+}

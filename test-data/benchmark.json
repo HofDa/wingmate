@@ -1,0 +1,853 @@
+{
+  "version": "wing-normalizer-0.2",
+  "kind": "development smoke benchmark; no segmentation ground truth; timings hardware dependent",
+  "results": [
+    {
+      "file": "difficult/cryptarum-F-BUM0440_SEG20A-L.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1361,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.22591145833333334,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -0.3315915645088388,
+        0.010403259681835196,
+        1204.3760701711876,
+        -0.010403259681835196,
+        -0.3315915645088388,
+        847.9572993172361,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/cryptarum-F-BUM0446_SEG29A-R.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1175,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.12672526041666668,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -0.45917238278903827,
+        -0.023850118942318307,
+        1682.5391480966487,
+        0.023850118942318307,
+        -0.45917238278903827,
+        956.0925866817065,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/cryptarum-F-BUM0463_SEG37A-R.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1522,
+      "status": "GOOD",
+      "reasons": [],
+      "areaFraction": 0.19204427083333334,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        -0.27498791255716265,
+        0.055844964841556516,
+        872.838670457179,
+        -0.055844964841556516,
+        -0.27498791255716265,
+        763.584885250669,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/cryptarum-M-BUM0402_SEG27A-L.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1371,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.30572916666666666,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -0.2998269984850716,
+        -0.021632778186195627,
+        1114.8004424705073,
+        0.021632778186195627,
+        -0.2998269984850716,
+        636.8573777854881,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/cryptarum-M-BUM0435_SEG37A-R.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1270,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.3017708333333333,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        -0.2636365151860221,
+        0.03023284396243155,
+        941.0476888500452,
+        -0.03023284396243155,
+        -0.2636365151860221,
+        546.3005493441436,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/cryptarum-M-BUM0450_SEG37A-R.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1117,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.3296875,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        -0.27053831502243914,
+        -0.008734211557354208,
+        986.4225178350853,
+        0.008734211557354208,
+        -0.27053831502243914,
+        524.8840351609183,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/lucorum-F-000007-L.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1102,
+      "status": "REVIEW",
+      "reasons": [
+        "Keine plausible längliche Flügelkomponente",
+        "Maske bedeckt fast das ganze Bild",
+        "Flügel berührt den Bildrand",
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.8147916666666667,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        0.12674002006319665,
+        -0.01559525736317003,
+        316.34757427674117,
+        0.01559525736317003,
+        0.12674002006319665,
+        93.31493840692653,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/lucorum-F-000257-R.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1267,
+      "status": "REVIEW",
+      "reasons": [
+        "Keine plausible längliche Flügelkomponente",
+        "Maske bedeckt fast das ganze Bild",
+        "Flügel berührt den Bildrand",
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.9997298177083334,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        0.17084974621340127,
+        0.00003338377343259352,
+        213.5086966013131,
+        -0.00003338377343259352,
+        0.17084974621340127,
+        32.176997481537796,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/lucorum-F-B_3_U4_13_147-R.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1046,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.18799153645833333,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        -0.13129592072249655,
+        -0.03190812880365155,
+        841.5987696878772,
+        0.03190812880365155,
+        -0.13129592072249655,
+        264.95993677384735,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/lucorum-M-BUM0401_SEG07A-L.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1069,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.313544921875,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        -0.27438230703620997,
+        -0.04302460588330489,
+        1085.1739876064335,
+        0.04302460588330489,
+        -0.27438230703620997,
+        694.5508674271709,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/lucorum-M-BUM0451_SEG28A-R.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1293,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.25783203125,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        -0.2919912033501213,
+        0.007936471666445049,
+        1045.147951691251,
+        -0.007936471666445049,
+        -0.2919912033501213,
+        576.0272137874719,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/lucorum-M-B_3_U4_13_139-R.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1099,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.3571321614583333,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        -0.1635772173712028,
+        -0.051688132951146604,
+        851.1884443244792,
+        0.051688132951146604,
+        -0.1635772173712028,
+        298.8075020107972,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/terrestris-F-000001-L.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1207,
+      "status": "REVIEW",
+      "reasons": [
+        "Keine plausible längliche Flügelkomponente",
+        "Maske bedeckt fast das ganze Bild",
+        "Flügel berührt den Bildrand",
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.99974609375,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        0.17087815661638395,
+        0.00001100712527810585,
+        213.5149768365883,
+        -0.00001100712527810585,
+        0.17087815661638395,
+        32.1025628819898,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/terrestris-F-BUM0436_SEO06A-L.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1234,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.21413736979166667,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        -0.31560350459614156,
+        -0.07320816312517794,
+        1290.83467160292,
+        0.07320816312517794,
+        -0.31560350459614156,
+        657.612093123864,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/terrestris-F-B_3_U4_9_95-R.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1089,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.3113606770833333,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -0.1566795222691063,
+        0.027106713065079665,
+        770.4308190007789,
+        -0.027106713065079665,
+        -0.1566795222691063,
+        536.0479917338747,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/terrestris-M-2023_1_1-L.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1103,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.36590169270833334,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -0.24701655155316543,
+        -0.017979989365452198,
+        1022.4459786551888,
+        0.017979989365452198,
+        -0.24701655155316543,
+        522.0942559398361,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/terrestris-M-2023_3_16-L.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1031,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.308486328125,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -0.1547509854501517,
+        -0.005572700859347507,
+        842.1221701193655,
+        0.005572700859347507,
+        -0.1547509854501517,
+        459.6415152059492,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/terrestris-M-B_3_U4_9_89-R.dw.png",
+      "width": 3488,
+      "height": 2616,
+      "elapsedMs": 1084,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.2582421875,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        -0.1354711952547148,
+        -0.020937039677470414,
+        783.2636829005462,
+        0.020937039677470414,
+        -0.1354711952547148,
+        313.81249764504855,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-A-Agapostemon-sericeus.png",
+      "width": 348,
+      "height": 249,
+      "elapsedMs": 168,
+      "status": "REVIEW",
+      "reasons": [
+        "Keine plausible längliche Flügelkomponente",
+        "Maske bedeckt fast das ganze Bild",
+        "Flügel berührt den Bildrand",
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.8036283063287634,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        1.4798214606965368,
+        0.13395893582165758,
+        237.42846393974884,
+        -0.13395893582165758,
+        1.4798214606965368,
+        113.97804834842233,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-B-Agapostemon-texanus.png",
+      "width": 353,
+      "height": 249,
+      "elapsedMs": 158,
+      "status": "REVIEW",
+      "reasons": [
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.7861701764565343,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        1.441815611863031,
+        -0.5774447984512048,
+        316.9216798117643,
+        0.5774447984512048,
+        1.441815611863031,
+        -34.213779921056755,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-C-Bombus-bimaculatus.png",
+      "width": 384,
+      "height": 249,
+      "elapsedMs": 149,
+      "status": "REVIEW",
+      "reasons": [
+        "Keine plausible längliche Flügelkomponente",
+        "Maske bedeckt fast das ganze Bild",
+        "Flügel berührt den Bildrand",
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.9138533299866132,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -1.6502911258411554,
+        -0.07399030429704696,
+        838.7554109536259,
+        0.07399030429704696,
+        -1.6502911258411554,
+        439.1235659165353,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-D-Bombus-griseocollis.png",
+      "width": 405,
+      "height": 247,
+      "elapsedMs": 178,
+      "status": "REVIEW",
+      "reasons": [
+        "Keine plausible längliche Flügelkomponente",
+        "Maske bedeckt fast das ganze Bild",
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.9161093617233969,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        1.7672173182283053,
+        -0.03046216920341725,
+        152.21061569265424,
+        0.03046216920341725,
+        1.7672173182283053,
+        29.733045206030596,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-E-Bombus-impatiens.png",
+      "width": 393,
+      "height": 247,
+      "elapsedMs": 184,
+      "status": "REVIEW",
+      "reasons": [
+        "Keine plausible längliche Flügelkomponente",
+        "Maske bedeckt fast das ganze Bild",
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.9489342852139155,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        1.6695947935273419,
+        0.10623932164670469,
+        162.1244747995894,
+        -0.10623932164670469,
+        1.6695947935273419,
+        75.86410430476181,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "venation/Spiesman-S2-F-Bombus-perplexus.png",
+      "width": 419,
+      "height": 247,
+      "elapsedMs": 138,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.5112133187751828,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        1.6677225308000434,
+        -0.7396018401246702,
+        207.87039972668504,
+        0.7396018401246702,
+        1.6677225308000434,
+        -144.1405742655,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-G-Bombus-sandersoni.png",
+      "width": 506,
+      "height": 246,
+      "elapsedMs": 161,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.6436662489154535,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        1.5538197332927792,
+        -0.3757300634346924,
+        141.08046789066157,
+        0.3757300634346924,
+        1.5538197332927792,
+        -50.01972219675224,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-H-Bombus-vagans.png",
+      "width": 462,
+      "height": 246,
+      "elapsedMs": 187,
+      "status": "GOOD",
+      "reasons": [],
+      "areaFraction": 0.5866856720515257,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        1.839806421895275,
+        0.5527763992607633,
+        16.120198099050924,
+        -0.5527763992607633,
+        1.839806421895275,
+        172.94640266838684,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-I-Ceratina-calcarata.png",
+      "width": 326,
+      "height": 246,
+      "elapsedMs": 104,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand",
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.6979649857848271,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        1.9118428664556781,
+        -0.08157982477084531,
+        184.8372457849839,
+        0.08157982477084531,
+        1.9118428664556781,
+        25.405785778433057,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-J-Lasioglossum-acuminatum.png",
+      "width": 326,
+      "height": 245,
+      "elapsedMs": 102,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand",
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.7611618880681107,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -1.395257810974753,
+        -0.3239326437786896,
+        762.4669260586047,
+        0.3239326437786896,
+        -1.395257810974753,
+        371.9800155884151,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-K-Lasioglossum-admirandum.png",
+      "width": 288,
+      "height": 245,
+      "elapsedMs": 97,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.5415958049886621,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        2.037685664862464,
+        1.4415810602182184,
+        33.99606066071436,
+        -1.4415810602182184,
+        2.037685664862464,
+        177.5365989731023,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-L-Lasioglossum-coriaceum.png",
+      "width": 327,
+      "height": 245,
+      "elapsedMs": 93,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand",
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.7182674904824315,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -1.6546452813661083,
+        -0.241426466822519,
+        805.006761209371,
+        0.241426466822519,
+        -1.6546452813661083,
+        435.2509689576733,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-M-Lasioglossum-leucozonium.png",
+      "width": 326,
+      "height": 246,
+      "elapsedMs": 118,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand",
+        "Keine ausgeprägte Längsachse"
+      ],
+      "areaFraction": 0.6466906080103746,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -1.5500628579278415,
+        -0.27518548658483294,
+        764.2592834776293,
+        0.27518548658483294,
+        -1.5500628579278415,
+        411.2896377871514,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-N-Lasioglossum-oceanicum.png",
+      "width": 367,
+      "height": 246,
+      "elapsedMs": 109,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.6666002082364147,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        -1.3750100090063406,
+        -0.36983944405552244,
+        781.9286984489755,
+        0.36983944405552244,
+        -1.3750100090063406,
+        365.30646255458123,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-O-Lasioglossum-pilosum.png",
+      "width": 337,
+      "height": 246,
+      "elapsedMs": 115,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.5831584280234494,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        1.9730815839582683,
+        1.087214707089671,
+        53.946820107258134,
+        -1.087214707089671,
+        1.9730815839582683,
+        168.64203990264326,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-P-Lasioglossum-versatum.png",
+      "width": 363,
+      "height": 243,
+      "elapsedMs": 149,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.660182067589475,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        1.8683086578567463,
+        -0.8493692892636019,
+        262.9368398990264,
+        0.8493692892636019,
+        1.8683086578567463,
+        -141.00197404680802,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-Q-Lasioglossum-zephyrus.png",
+      "width": 355,
+      "height": 243,
+      "elapsedMs": 115,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.6474120442821538,
+      "orientationConfidence": "medium",
+      "transformMatrix": [
+        1.5251921454807276,
+        0.566271596158734,
+        182.05322259600263,
+        -0.566271596158734,
+        1.5251921454807276,
+        175.82736404980668,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "difficult/Spiesman-S2-R-Lasioglossum-zonulus.png",
+      "width": 359,
+      "height": 243,
+      "elapsedMs": 99,
+      "status": "REVIEW",
+      "reasons": [
+        "Flügel berührt den Bildrand"
+      ],
+      "areaFraction": 0.7476529454245332,
+      "orientationConfidence": "low",
+      "transformMatrix": [
+        -1.5018842484601613,
+        -0.17464846938674877,
+        792.48824343704,
+        0.17464846938674877,
+        -1.5018842484601613,
+        396.4679928838436,
+        0,
+        0,
+        1
+      ]
+    }
+  ]
+}

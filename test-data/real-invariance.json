@@ -1,0 +1,78 @@
+{
+  "source": "venation/Spiesman-S2-F-Bombus-perplexus.png",
+  "note": "Controlled affine perturbations on padded canvas; not independent captures",
+  "results": [
+    {
+      "angle": 0,
+      "scale": 1,
+      "dx": 0,
+      "dy": 0,
+      "bg": 235,
+      "maskIoU": 1,
+      "status": "REVIEW"
+    },
+    {
+      "angle": 25,
+      "scale": 1,
+      "dx": 0,
+      "dy": 0,
+      "bg": 235,
+      "maskIoU": 0.9946288671711737,
+      "status": "REVIEW"
+    },
+    {
+      "angle": 90,
+      "scale": 1,
+      "dx": 0,
+      "dy": 0,
+      "bg": 235,
+      "maskIoU": 0.9850630495615216,
+      "status": "REVIEW"
+    },
+    {
+      "angle": 180,
+      "scale": 1,
+      "dx": 0,
+      "dy": 0,
+      "bg": 235,
+      "maskIoU": 0.9850630495615216,
+      "status": "REVIEW"
+    },
+    {
+      "angle": 0,
+      "scale": 1,
+      "dx": 30,
+      "dy": -25,
+      "bg": 235,
+      "maskIoU": 1,
+      "status": "REVIEW"
+    },
+    {
+      "angle": 0,
+      "scale": 0.7,
+      "dx": 0,
+      "dy": 0,
+      "bg": 235,
+      "maskIoU": 0.9867486555119611,
+      "status": "REVIEW"
+    },
+    {
+      "angle": 0,
+      "scale": 1.25,
+      "dx": 0,
+      "dy": 0,
+      "bg": 235,
+      "maskIoU": 0.9936160901730959,
+      "status": "REVIEW"
+    },
+    {
+      "angle": 0,
+      "scale": 1,
+      "dx": 0,
+      "dy": 0,
+      "bg": 225,
+      "maskIoU": 0.6120076663645683,
+      "status": "REVIEW"
+    }
+  ]
+}
