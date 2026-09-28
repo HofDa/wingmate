@@ -1,6 +1,8 @@
 import { VERSION } from "./pipeline.js";
 import { saveSpecimen, latestSpecimen } from "./storage.js";
 import { activeRig } from "./rig-store.js";
+import { createLandmarkEditor } from "./landmark-ui.js";
+import { emptyLandmarks, placed, landmarksCsv, scheme, toNormalized } from "../classifier/landmarks.js";
 const $ = (s) => document.querySelector(s);
 const items = { venation: null, wip: null };
 let worker,
@@ -416,6 +418,7 @@ function render() {
     };
     manual.append(file);
     article.append(manual);
+    if (type === landmarkHost()) article.append(landmarkSection(item));
     const details = document.createElement("details"),
       summary = document.createElement("summary"),
       pre = document.createElement("pre");
@@ -450,6 +453,9 @@ function render() {
       : "Registrierung ausstehend";
     align.append(p);
   }
+  updateButtons();
+}
+function updateButtons() {
   $("#qcAccept").disabled =
     busy ||
     !Object.values(items).some(Boolean) ||
@@ -464,6 +470,56 @@ function render() {
       .filter(Boolean)
       .every((i) => i.result) ||
     !Object.values(items).some(Boolean);
+  const host = items[landmarkHost()];
+  $("#qcLandmarkCsv").disabled = busy || !host?.landmarks || !placed(host.landmarks);
+}
+// Landmarks belong to the specimen and are placed on one image: venation if
+// present (veins are sharpest in transmitted light), otherwise WIP.
+const landmarkHost = () => (items.venation ? "venation" : items.wip ? "wip" : null);
+let landmarkOpen = false;
+function landmarkSection(item) {
+  const details = document.createElement("details"),
+    summary = document.createElement("summary"),
+    s = scheme(item.landmarks.scheme),
+    label = () =>
+      `Landmarken · ${placed(item.landmarks)} / ${s.count} gesetzt${item.result.metadata.standardConfirmed ? "" : " · Standardorientierung noch nicht bestätigt"}`;
+  details.className = "lm-details";
+  details.open = landmarkOpen;
+  summary.textContent = label();
+  details.append(summary);
+  const note = document.createElement("p");
+  note.className = "mini";
+  note.textContent = `${s.name}. ${s.note} Punkte werden in Originalpixeln gespeichert und bleiben bei Flip/Mirror/Neuberechnung gültig.`;
+  details.append(note);
+  let editor = null;
+  const open = () => {
+    if (editor) return;
+    editor = createLandmarkEditor({
+      normalized: item.result.normalized,
+      original: item.image,
+      metadata: item.result.metadata,
+      landmarks: item.landmarks,
+      onChange: () => {
+        summary.textContent = label();
+        landmarksChanged();
+      },
+    });
+    details.append(editor.element);
+  };
+  details.ontoggle = () => {
+    landmarkOpen = details.open;
+    if (details.open) open();
+  };
+  if (details.open) open();
+  return details;
+}
+// Changing landmarks after Accept makes the archived record stale.
+function landmarksChanged() {
+  const wasAccepted = Object.values(items).some((i) => i?.accepted);
+  for (const i of Object.values(items)) if (i) i.accepted = false;
+  if (wasAccepted) $("#qcStatus").textContent = "Landmarken geändert – bitte erneut akzeptieren.";
+  updateButtons();
+  emit();
 }
 // The active rig is applied only when its profile matches the image size;
 // otherwise the image is processed without correction and the reason is shown.
@@ -562,6 +618,7 @@ async function load(type, file, capture = null) {
       sourceFile: file,
       name: file.name,
       capture,
+      landmarks: emptyLandmarks(),
       options: {},
       result: null,
       accepted: false,
@@ -648,6 +705,8 @@ $("#qcRestore").onclick = async () => {
         sourceFile: entry.sourceFile,
         name: entry.sourceName,
         sha256: entry.sourceSha256,
+        capture: entry.capture ?? null,
+        landmarks: entry.landmarks ?? emptyLandmarks(),
         accepted: false,
         result: null,
         options: {
@@ -680,6 +739,13 @@ $("#qcExport").onclick = () => {
               ...i.result.metadata,
               sourceFile: i.name,
               sourceSha256: i.sha256,
+              landmarks: i.landmarks && placed(i.landmarks)
+                ? {
+                    ...i.landmarks,
+                    coordinateSpace: "original-pixels (y down)",
+                    normalized: toNormalized(i.landmarks, i.result.metadata),
+                  }
+                : null,
               mask: {
                 width: i.result.analysis.width,
                 height: i.result.analysis.height,
@@ -695,6 +761,14 @@ $("#qcExport").onclick = () => {
     new Blob([JSON.stringify(specimen, null, 2)], { type: "application/json" }),
   );
   download(url, "wing-preprocessing.json");
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+$("#qcLandmarkCsv").onclick = () => {
+  const item = items[landmarkHost()];
+  if (!item) return;
+  const csv = landmarksCsv([{ file: item.name, landmarks: item.landmarks, height: item.image.height }]),
+    url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  download(url, item.name.replace(/\.[^.]+$/, "") + "-landmarks.csv");
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 function rle(mask) {

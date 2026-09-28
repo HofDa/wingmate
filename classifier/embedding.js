@@ -15,10 +15,13 @@ export function mulberry32(a) {
 }
 
 // Blocks present in every record, in a fixed order.
-export const BLOCK_ORDER = ["size", "shape", "venation", "wip"];
+export const BLOCK_ORDER = ["landmarks", "size", "shape", "venation", "wip"];
+// Landmark blocks are only comparable within one scheme.
 export function commonBlocks(records) {
-  return BLOCK_ORDER.filter((b) =>
-    records.every((r) => Array.isArray(r.blocks?.[b])),
+  return BLOCK_ORDER.filter(
+    (b) =>
+      records.every((r) => Array.isArray(r.blocks?.[b])) &&
+      (b !== "landmarks" || new Set(records.map((r) => r.landmarkScheme)).size === 1),
   );
 }
 

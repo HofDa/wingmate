@@ -83,7 +83,7 @@ const { chromium } = require("playwright");
   result.walkAfterChange = await page.evaluate(
     () => document.querySelectorAll("#walkView [data-nodes] tr").length,
   );
-  await page.screenshot({ path: process.env.SHOT || "classifier-e2e.png", fullPage: true });
+  await page.screenshot({ path: process.env.SHOT || require("node:path").join(require("node:os").tmpdir(), "classifier-e2e.png"), fullPage: true });
   console.log(JSON.stringify({ stored, ...result, errors }, null, 2));
   await browser.close();
   const ok =

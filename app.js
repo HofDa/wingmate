@@ -23,9 +23,11 @@ import {
   calibrate,
   conformalPredict,
   leaveOneOut,
+  summarize,
   CLASSIFIER_DEFAULTS,
 } from "./classifier/classify.js";
-import { pca2 } from "./classifier/morphometrics.js";
+import { pca2, fitShapeLDA, fitCalibratedShapeLDA } from "./classifier/morphometrics.js";
+import { landmarkBlock, alignLandmarkBlocks } from "./classifier/landmarks.js";
 import { createWalkView, traceWalk } from "./walk.js";
 
 const $ = (s) => document.querySelector(s);
@@ -68,6 +70,7 @@ const round = (v) => Number(v.toPrecision(5));
 function compactFeatures(features) {
   return {
     version: features.version,
+    ...(features.landmarkScheme ? { landmarkScheme: features.landmarkScheme } : {}),
     blocks: Object.fromEntries(
       Object.entries(features.blocks).map(([k, v]) => [k, v.map(round)]),
     ),
@@ -203,11 +206,16 @@ async function importRefs(file) {
 // Build the comparison space from the references only (standardisation is
 // fitted on references; the query never influences it).
 function space(refs, extra = [], { mode, params } = reservoirSettings()) {
-  const blocks = commonBlocks([...refs.map((r) => r.features), ...extra]);
+  const all = [...refs.map((r) => r.features), ...extra],
+    blocks = commonBlocks(all);
   if (!blocks.length) throw Error("Keine gemeinsamen Merkmalsblöcke");
-  const standardizer = fitStandardizer(refs.map((r) => r.features), blocks),
+  // Landmarks enter as Procrustes-aligned coordinates (label-free GPA over
+  // references and query), not as raw pixel positions.
+  const aligned = blocks.includes("landmarks") ? alignLandmarkBlocks(all) : null,
+    prepare = (f) => (aligned?.has(f) ? { ...f, blocks: { ...f.blocks, landmarks: aligned.get(f) } } : f);
+  const standardizer = fitStandardizer(refs.map((r) => prepare(r.features)), blocks),
     embed = makeEmbedder(mode, standardizer.dim, params, state.graph),
-    toEmbedding = (features) => embed(standardizer.transform(features)),
+    toEmbedding = (features) => embed(standardizer.transform(prepare(features))),
     embeddings = refs.map((r) => toEmbedding(r.features));
   return {
     blocks,
@@ -237,6 +245,7 @@ function classify() {
       best = Math.max(...qs);
     renderResults({ scores, knn, conformal, best, n: refs.length + 1, blocks: s.blocks });
     showWalk(s, qs, refs);
+    renderLDA(refs);
     drawEmbedding(s, q);
     message(
       "#classifyStatus",
@@ -275,6 +284,83 @@ function clearResults() {
   pill.textContent = "open-set: —";
   delete pill.dataset.kind;
   walkView.reset();
+}
+// Procrustes + LDA on landmarks: the geometric-morphometrics standard. Needs
+// a landmark block of one scheme on every reference (and the query).
+function landmarkRefs(refs, query = null) {
+  const all = [...refs.map((r) => r.features), ...(query ? [query] : [])];
+  if (!commonBlocks(all).includes("landmarks")) return null;
+  const labels = refs.map((r) => r.species);
+  if (new Set(labels).size < 2) return null;
+  const aligned = alignLandmarkBlocks(all);
+  return { X: refs.map((r) => aligned.get(r.features)), q: query ? aligned.get(query) : null, labels, groups: refs.map(groupOf) };
+}
+function renderLDA(refs) {
+  let box = $("#ldaResult");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "ldaResult";
+    $("#predictionSet").after(box);
+  }
+  box.replaceChildren();
+  const data = landmarkRefs(refs, state.query.features);
+  if (!data) {
+    const missing = refs.filter((r) => !r.features.blocks.landmarks).length;
+    box.append(
+      Object.assign(document.createElement("p"), {
+        className: "mini",
+        textContent: !state.query.features.blocks.landmarks
+          ? "Procrustes + LDA: Für dieses Exemplar sind keine vollständigen Landmarken gesetzt (oder die Orientierung ist nicht bestätigt)."
+          : `Procrustes + LDA: ${missing} Referenzen ohne vollständige Landmarken desselben Schemas.`,
+      }),
+    );
+    return;
+  }
+  const model = fitCalibratedShapeLDA(data.X, data.labels, data.groups),
+    proba = Object.entries(model.predictProba(data.q)).sort((a, b) => b[1] - a[1]),
+    perTaxon = {};
+  new Set(data.groups.map((g, i) => data.labels[i] + "\u0000" + g)).forEach((k) => {
+    const t = k.split("\u0000")[0];
+    perTaxon[t] = (perTaxon[t] || 0) + 1;
+  });
+  const fewest = Math.min(...Object.values(perTaxon));
+  box.append(Object.assign(document.createElement("h3"), { textContent: "Procrustes + LDA (Landmarken)" }));
+  for (const [label, p] of proba.slice(0, 5)) {
+    const row = document.createElement("div"),
+      track = document.createElement("div"),
+      fill = document.createElement("div");
+    row.className = "barrow";
+    track.className = "bartrack";
+    fill.className = "barfill";
+    fill.style.width = (100 * p).toFixed(1) + "%";
+    track.append(fill);
+    row.append(
+      Object.assign(document.createElement("strong"), { textContent: label }),
+      track,
+      Object.assign(document.createElement("span"), { className: "barpct", textContent: (100 * p).toFixed(1) + "%" }),
+    );
+    box.append(row);
+  }
+  box.append(
+    Object.assign(document.createElement("p"), {
+      className: "mini",
+      textContent:
+        `Posterior unter der Annahme, dass das Tier zu einem der ${model.taxa.length} Referenztaxa gehört. ` +
+        `${model.components} Hauptkomponenten (${Math.round(100 * model.explainedVariance)} % Formvarianz), Ledoit–Wolf-Schrumpfung ${model.shrinkage.toFixed(2)}, ` +
+        (model.temperature
+          ? `Wahrscheinlichkeiten per Leave-one-out kalibriert (Temperatur ${model.temperature.toFixed(2)}). `
+          : "zu wenige Referenzen zum Kalibrieren – Wahrscheinlichkeiten unkalibriert. ") +
+        "LDA erkennt keine unbekannten Arten – dafür das konforme Set oben beachten.",
+    }),
+  );
+  if (fewest < 5) {
+    const warning = Object.assign(document.createElement("p"), {
+      className: "status",
+      textContent: `Nur ${fewest} Exemplar(e) im kleinsten Taxon: Auf realen Bombus-Daten liegt die Trefferquote bei 3 Exemplaren/Art um 65 %, bei 10 um 80 % (test-data/landmark-benchmark.json).`,
+    });
+    warning.dataset.kind = "warn";
+    box.append(warning);
+  }
 }
 function renderResults({ scores, knn, conformal, best, n, blocks }) {
   const box = $("#resultBars");
@@ -344,6 +430,16 @@ function validate() {
     if (current.mode !== "none") {
       const control = space(refs, [], { mode: "none", params: {} });
       rows.push(["RWR · kein Reservoir (Kontrolle)", leaveOneOut(control.ctx, control.labels, control.groups, "rwr")]);
+    }
+    const lm = landmarkRefs(refs);
+    if (lm) {
+      const groups = refs.map(groupOf),
+        predictions = lm.X.map((x, i) => {
+          const train = lm.X.map((_, j) => j).filter((j) => groups[j] !== groups[i]);
+          if (!train.some((j) => lm.labels[j] === lm.labels[i]) || new Set(train.map((j) => lm.labels[j])).size < 2) return null;
+          return fitShapeLDA(train.map((j) => lm.X[j]), train.map((j) => lm.labels[j])).predict(x);
+        });
+      rows.unshift(["Procrustes + LDA (Landmarken)", summarize(lm.labels, predictions)]);
     }
     const table = document.createElement("table"),
       head = table.createTHead().insertRow();
@@ -482,11 +578,18 @@ window.addEventListener("wing-preprocessing-change", ({ detail }) => {
         images[type] = { ...item.result.metadata, sourceSha256: item.sha256 };
       }
     try {
-      state.query = {
-        // Prefer the venation measurement: transmitted light gives the cleanest outline.
-        features: extractFeatures(normalized, {
+      // Prefer the venation measurement: transmitted light gives the cleanest outline.
+      const features = extractFeatures(normalized, {
           metricSize: (images.venation ?? images.wip)?.metricSize ?? null,
         }),
+        host = detail.items.venation ?? detail.items.wip,
+        landmarks = landmarkBlock(host?.landmarks, host?.result?.metadata);
+      if (landmarks) {
+        features.blocks.landmarks = landmarks;
+        features.landmarkScheme = host.landmarks.scheme;
+      }
+      state.query = {
+        features,
         preprocessing: { version: PREPROCESSING_VERSION, images },
         specimenArchiveId: Object.values(images)[0]?.specimenArchiveId ?? null,
       };

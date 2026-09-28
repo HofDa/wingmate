@@ -32,6 +32,7 @@ export async function saveSpecimen(items, { rig = null } = {}) {
             sourceSha256: i.sha256,
             sourceName: i.name,
             capture: i.capture ?? null,
+            landmarks: i.landmarks ?? null,
             metadata: i.result.metadata,
             mask: i.result.mask,
             normalized: i.result.normalized,

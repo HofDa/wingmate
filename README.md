@@ -22,6 +22,16 @@ python -m http.server 8000
 
 Dann `http://localhost:8000` öffnen.
 
+## GitHub Pages
+
+Die veröffentlichte App: **https://hofda.github.io/wingmate/**.
+
+Der Workflow `.github/workflows/pages.yml` testet bei jedem Push auf `master` die Anwendung, erstellt das statische `_site`-Artefakt und veröffentlicht es über GitHub Pages. In den Repository-Einstellungen ist **Pages → Source → GitHub Actions** erforderlich. Der Workflow kann auch manuell gestartet werden.
+
+`npm run build:pages` erstellt das Artefakt lokal in einem leeren `_site`-Verzeichnis. Es enthält die Laufzeitdateien und Icons; Testdatensätze, Entwicklerwerkzeuge und lokale Zertifikate werden nicht als Website veröffentlicht. Die Service-Worker-Version wird aus dem Inhalt des Artefakts erzeugt, damit geänderte Deployments automatisch einen neuen Offline-Cache erhalten. `PWA_SITE_ROOT=_site node scripts/pwa-smoke.cjs` prüft das fertige Artefakt inklusive Unterverzeichnis-Hosting und Offline-Nutzung.
+
+Die Online-App speichert ihre Referenzen und Exemplare separat von `localhost`, da Browserspeicher an die Herkunft gebunden ist. Referenzen bei Bedarf lokal exportieren und in der veröffentlichten App importieren.
+
 Für das **Smartphone** (Kamera braucht HTTPS) im selben WLAN:
 
 ```bash
@@ -106,6 +116,45 @@ Masken-IoU mit Profil auf > 0,95 und liegt deutlich über der Randfarben-Segment
 - Hohe Farbwiedergabe (CRI ≥ 90) und nach Wechsel von Lampe, Diffusor, Vorsatzlinse oder Telefon
   neu kalibrieren. Die Rig-Abweichung in der Vorschau zeigt, wann das nötig ist.
 
+## Landmarken setzen (Procrustes + LDA)
+
+In der QC-Karte des Venation-Bildes (ohne Venation: WIP) öffnet **Landmarken** den Editor
+(`imaging/landmark-ui.js`, Schema/Koordinaten in `classifier/landmarks.js`):
+
+- **Tippen/Klicken** setzt die aktuelle Landmarke und springt zur nächsten offenen. Ein Punkt wird
+  nur verschoben, wenn man ihn *zieht* – so lassen sich eng benachbarte Landmarken (1/2, 16/17)
+  setzen. Ein Klick auf einen anderen Punkt wählt ihn aus.
+- **Lupe**: zeigt die *Originalpixel* (volle Kameraauflösung) in Standardorientierung, 6-fach.
+  Ein Klick dort verfeinert die gewählte Landmarke und geht weiter – grob tippen, fein setzen,
+  auch am Handy. Pfeiltasten verschieben um 0,25 px (Shift: 2 px), `n`/`p` wechseln, Strg+Z.
+- **Führung**: Übersicht des mittleren Musters mit der aktuellen Nummer. Ab 2 Punkten wird es an
+  die gesetzten Punkte angepasst und zeigt gestrichelt, wo die nächsten erwartet werden. Ab 4
+  Punkten werden starke Abweichungen orange markiert (typisch: vertauschte Nummern).
+- **Fehlt (beschädigt)** markiert eine nicht bestimmbare Landmarke; unvollständige Sätze gehen
+  nicht in die Klassifikation ein.
+- Gespeichert wird in **Originalpixeln**; die Punkte bleiben bei Flip/Mirror/Schwelle/Neuberechnung
+  gültig. Ins Archiv (IndexedDB), in den JSON-Export und als **Landmarken CSV**
+  (`file,x1,y1,…`, y nach unten; `landmarksCsv(…, {yUp: true})` für die Konvention des Datensatzes)
+  für MorphoJ/geomorph. Änderungen nach **Accept** heben die Freigabe auf.
+
+**Schema** `bombus-19`: die 19 Landmarken des Molasy-&-Tofilski-Datensatzes (IdentiFly-Nummerierung).
+Die Führung ist das Procrustes-Mittel aller 814 Flügel, nachgerechnet in `tests/landmarks.test.js`.
+Achtung: die CSV des Datensatzes zählt **y von unten** (auf den 18 lokalen Bildern liegen die Punkte
+nur so auf Aderkreuzungen). Für Gattungen mit anderer Aderung (z. B. 2 Submarginalzellen) ist ein
+eigenes Schema nötig; Blöcke verschiedener Schemata werden nie verglichen.
+
+**Klassifikation**: Vollständige Landmarken eines *orientierungsbestätigten* Bildes werden zum Block
+`landmarks` (Standardansicht, damit linke und rechte Flügel nach Mirror vergleichbar sind –
+Procrustes entfernt keine Spiegelung). Haben alle Referenzen Landmarken desselben Schemas, zeigt die
+Ausgabe zusätzlich **Procrustes + LDA**: GPA (ohne Labels, inkl. Abfrage) → Hauptkomponenten
+(bei wenigen Exemplaren höchstens (n − Taxa)/2) → LDA mit Ledoit–Wolf-Schrumpfung →
+Wahrscheinlichkeiten per gruppiertem Leave-one-out **temperaturkalibriert**. Die Validierung listet
+die LDA-Zeile zuerst. LDA wählt immer ein bekanntes Taxon; für Unbekannte gilt das konforme Set.
+
+Warum kalibrieren: Unkalibriert nennt LDA auf den *Bombus*-Daten mit 3–10 Exemplaren/Art im Mittel
+95–98 % Sicherheit, liegt aber nur zu 67–83 % richtig. Kalibriert (3 / 5 / 10 Exemplare): angegeben
+58 / 67 / 77 %, tatsächlich 66 / 72 / 83 % richtig; Brier-Score jeweils besser.
+
 ## Echte FlyWire-Daten
 
 Codex bietet für FlyWire-FAFB öffentliche Daten-Downloads und exportierbare Connectivity-Tabellen. Für den Browser sollte nicht das komplette Netzwerk geladen werden, sondern ein Subgraph (z. B. Mushroom Body / Kenyon-cell-bezogene Zellen).
@@ -163,7 +212,8 @@ Code in `classifier/` (reine ES-Module, in Node getestet), UI in `app.js`, Marko
 
 | Verfahren | Genauigkeit | balanciert |
 |---|---|---|
-| Procrustes + LDA (Standard der geometrischen Morphometrie) | 96,1 % | 92,6 % |
+| Procrustes + LDA (Standard der geometrischen Morphometrie, Ledoit–Wolf) | 96,2 % | 92,6 % |
+| Procrustes + PCA + LDA (App-Standard) | 96,1 % | 92,3 % |
 | RWR · kein Reservoir | 86,0 % | 82,5 % |
 | RWR · kein Reservoir, ohne Prior-Korrektur | 91,0 % | 55,2 % |
 | RWR · FlyHash 2048 KC | 78,9 % | 81,2 % |
@@ -173,13 +223,23 @@ Konform (ε = 0,1): Abdeckung 90 % wie angestrebt; eine zurückgehaltene Art wir
 zu 14–44 % als unbekannt erkannt (kryptische Arten). **FlyHash schlägt die Kontrollen hier
 nicht**, und LDA bleibt deutlich besser; ein Vorteil des Fly-Rechenraums ist also nicht belegt.
 
+Mit nur **10 Exemplaren pro Art** als Referenz (20 Ziehungen, Rest als Abfrage) sinkt die balancierte
+Genauigkeit auf 81,7 % ± 8,0 (Procrustes + PCA + LDA), kNN 75,7 %, RWR 69,7 % – realistisch für
+einen ersten eigenen Datensatz kryptischer Arten.
+
 ### Tests
 
 ```bash
 npm test                                           # Node: Normalisierung, Klassifikation, Walk
 NODE_PATH=… node scripts/classifier-e2e.cjs        # Browser: QC → Referenzen → Klassifikation → Walk → Validierung
 NODE_PATH=… node scripts/camera-e2e.cjs            # Browser, Fake-Kamera: Rig kalibrieren → Neustart → Aufnahme → QC
+NODE_PATH=… node scripts/landmark-e2e.cjs          # Browser, 7 reale Flügel: 19 Landmarken per UI, Lupe, LDA, CSV
 ```
+
+Der Landmarken-E2E klickt die publizierten Landmarken durch die Oberfläche, prüft den exakten
+Koordinatenweg (Klick → Standardansicht → Originalpixel, auch mit Flip/Mirror), dass die Punkte
+auf Aderkreuzungen des angezeigten Bildes liegen, sowie LDA-Ergebnis, Validierung und CSV-Export.
+Er misst nicht, wie genau ein Mensch klickt.
 
 Der Klassifikations-E2E prüft Verdrahtung und Konsistenz auf den Entwicklungsbildern, keine
 Genauigkeit. Der Kamera-E2E erzeugt synthetische Y4M-Videos (leeres Rig / Rig mit Flügel inkl.

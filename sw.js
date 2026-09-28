@@ -1,5 +1,5 @@
 // Bump this version whenever a cached application asset changes.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE_PREFIX = `wingmate:${self.registration.scope}:`;
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const APP_FILES = [
@@ -11,7 +11,8 @@ const APP_FILES = [
   './imaging/qc-ui.js', './imaging/worker.js', './imaging/pipeline.js',
   './imaging/normalization.js', './imaging/quality.js', './imaging/segmentation.js',
   './imaging/orientation.js', './imaging/matrix.js', './imaging/registration.js',
-  './imaging/storage.js', './imaging/rig.js', './imaging/rig-store.js', './imaging/camera.js',
+  './imaging/storage.js', './imaging/rig.js', './imaging/rig-store.js', './imaging/camera.js', './imaging/landmark-ui.js',
+  './classifier/landmarks.js',
 ];
 const APP_URLS = new Set(APP_FILES.map(file => new URL(file, self.registration.scope).href));
 

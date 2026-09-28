@@ -4,7 +4,7 @@ const http = require('node:http');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const root = path.resolve(__dirname, '..');
+const root = process.env.PWA_SITE_ROOT ? path.resolve(process.env.PWA_SITE_ROOT) : path.resolve(__dirname, '..');
 let version = 'v1';
 const mime = {'.js':'text/javascript','.html':'text/html','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json'};
 const server = http.createServer(async (req,res) => {
@@ -13,7 +13,7 @@ const server = http.createServer(async (req,res) => {
     const file = path.resolve(root, '.' + pathname + (pathname.endsWith('/') ? 'index.html' : ''));
     if (!file.startsWith(root + path.sep)) { res.writeHead(403); res.end(); return; }
     let body = await fs.readFile(file);
-    if (file.endsWith('/sw.js')) body = body.toString().replace("const VERSION = 'v1'", `const VERSION = '${version}'`);
+    if (file.endsWith('/sw.js')) body = body.toString().replace(/const VERSION = '[^']+'/, `const VERSION = '${version}'`);
     res.writeHead(200, {'Content-Type':mime[path.extname(file)] || 'application/octet-stream','Cache-Control':'no-store'});res.end(body);
   } catch { res.writeHead(404);res.end(); }
 });

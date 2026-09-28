@@ -9,8 +9,36 @@
     "Bombus terrestris": 662
   },
   "protocol": "grouped leave-one-out by specimen; GPA and z-scoring fitted without labels on all wings; LDA refitted per fold with equal priors",
-  "runtimeMs": 77471,
+  "runtimeMs": 94534,
   "results": {
+    "Procrustes + LDA (Ledoit–Wolf shrinkage)": {
+      "evaluated": 814,
+      "skipped": 0,
+      "accuracy": 0.961916461916462,
+      "balancedAccuracy": 0.9261559023765437,
+      "recall": {
+        "Bombus cryptarum": 0.8928571428571429,
+        "Bombus lucorum": 0.9112903225806451,
+        "Bombus terrestris": 0.974320241691843
+      },
+      "confusion": {
+        "Bombus cryptarum": {
+          "Bombus cryptarum": 25,
+          "Bombus lucorum": 3
+        },
+        "Bombus lucorum": {
+          "Bombus lucorum": 113,
+          "Bombus cryptarum": 9,
+          "Bombus terrestris": 2
+        },
+        "Bombus terrestris": {
+          "Bombus terrestris": 645,
+          "Bombus lucorum": 13,
+          "Bombus cryptarum": 4
+        }
+      },
+      "ms": 8129
+    },
     "Procrustes + LDA (shrinkage 0.1)": {
       "evaluated": 814,
       "skipped": 0,
@@ -38,7 +66,35 @@
           "Bombus cryptarum": 5
         }
       },
-      "ms": 2804
+      "ms": 2880
+    },
+    "Procrustes + PCA + LDA (app default)": {
+      "evaluated": 814,
+      "skipped": 0,
+      "accuracy": 0.9606879606879607,
+      "balancedAccuracy": 0.9234677303335329,
+      "recall": {
+        "Bombus cryptarum": 0.8928571428571429,
+        "Bombus lucorum": 0.9032258064516129,
+        "Bombus terrestris": 0.974320241691843
+      },
+      "confusion": {
+        "Bombus cryptarum": {
+          "Bombus cryptarum": 25,
+          "Bombus lucorum": 3
+        },
+        "Bombus lucorum": {
+          "Bombus lucorum": 112,
+          "Bombus terrestris": 3,
+          "Bombus cryptarum": 9
+        },
+        "Bombus terrestris": {
+          "Bombus terrestris": 645,
+          "Bombus lucorum": 13,
+          "Bombus cryptarum": 4
+        }
+      },
+      "ms": 12583
     },
     "kNN · no reservoir": {
       "evaluated": 814,
@@ -67,7 +123,7 @@
           "Bombus cryptarum": 33
         }
       },
-      "ms": 373
+      "ms": 270
     },
     "RWR · no reservoir": {
       "evaluated": 814,
@@ -96,7 +152,7 @@
           "Bombus cryptarum": 57
         }
       },
-      "ms": 6283
+      "ms": 4080
     },
     "RWR · no reservoir, unbalanced": {
       "evaluated": 814,
@@ -122,7 +178,7 @@
           "Bombus lucorum": 3
         }
       },
-      "ms": 10122
+      "ms": 4125
     },
     "kNN · FlyHash 2048 KC": {
       "evaluated": 814,
@@ -151,7 +207,7 @@
           "Bombus cryptarum": 41
         }
       },
-      "ms": 549
+      "ms": 286
     },
     "RWR · FlyHash 2048 KC": {
       "evaluated": 814,
@@ -179,7 +235,7 @@
           "Bombus cryptarum": 99
         }
       },
-      "ms": 11052
+      "ms": 6316
     },
     "kNN · FlyHash 4096 KC": {
       "evaluated": 814,
@@ -208,7 +264,7 @@
           "Bombus cryptarum": 40
         }
       },
-      "ms": 371
+      "ms": 360
     },
     "RWR · FlyHash 4096 KC": {
       "evaluated": 814,
@@ -237,7 +293,7 @@
           "Bombus cryptarum": 93
         }
       },
-      "ms": 10001
+      "ms": 5979
     },
     "kNN · dense random proj. (control)": {
       "evaluated": 814,
@@ -266,7 +322,7 @@
           "Bombus cryptarum": 33
         }
       },
-      "ms": 352
+      "ms": 355
     },
     "RWR · dense random proj. (control)": {
       "evaluated": 814,
@@ -295,7 +351,72 @@
           "Bombus cryptarum": 54
         }
       },
-      "ms": 9885
+      "ms": 5416
+    }
+  },
+  "smallReference": {
+    "Procrustes + LDA (Ledoit–Wolf)": {
+      "meanBalancedAccuracy": 0.8094342393993287,
+      "sd": 0.06829883169525577,
+      "draws": 20
+    },
+    "Procrustes + LDA (shrinkage 0.1)": {
+      "meanBalancedAccuracy": 0.8045070191978461,
+      "sd": 0.06241556499849823,
+      "draws": 20
+    },
+    "Procrustes + PCA + LDA (app default)": {
+      "meanBalancedAccuracy": 0.8168059543988913,
+      "sd": 0.08015137146755892,
+      "draws": 20
+    },
+    "RWR · no reservoir": {
+      "meanBalancedAccuracy": 0.6969487632676304,
+      "sd": 0.049285435253388646,
+      "draws": 20
+    },
+    "kNN · no reservoir": {
+      "meanBalancedAccuracy": 0.7568413983054798,
+      "sd": 0.049064482961961704,
+      "draws": 20
+    }
+  },
+  "calibration": {
+    "3": {
+      "LDA, uncalibrated": {
+        "meanTopProbability": 0.978199507038564,
+        "balancedAccuracy": 0.6665652763444014,
+        "brier": 0.6413923335214987
+      },
+      "PCA + LDA, temperature-calibrated (app)": {
+        "meanTopProbability": 0.5773276038620941,
+        "balancedAccuracy": 0.6569205700164235,
+        "brier": 0.5525413574032693
+      }
+    },
+    "5": {
+      "LDA, uncalibrated": {
+        "meanTopProbability": 0.9612688282427234,
+        "balancedAccuracy": 0.7266654335346903,
+        "brier": 0.4949928382880321
+      },
+      "PCA + LDA, temperature-calibrated (app)": {
+        "meanTopProbability": 0.6710129986084925,
+        "balancedAccuracy": 0.7217818733071627,
+        "brier": 0.4490589293116263
+      }
+    },
+    "10": {
+      "LDA, uncalibrated": {
+        "meanTopProbability": 0.9496764510634585,
+        "balancedAccuracy": 0.8306866007717857,
+        "brier": 0.2865932708894713
+      },
+      "PCA + LDA, temperature-calibrated (app)": {
+        "meanTopProbability": 0.773407161910167,
+        "balancedAccuracy": 0.8341897674567327,
+        "brier": 0.25817576612469234
+      }
     }
   },
   "conformal": {
