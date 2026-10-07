@@ -300,11 +300,13 @@ function classify() {
 function showWalk(ctx, qs, species) {
   const { alpha, steps } = CLASSIFIER_DEFAULTS,
     { P, query } = rwrTransitions(ctx, qs),
-    labels = [...species.map((t, i) => `${t} · #${i + 1}`), "Anfrage"];
+    labels = [...species.map((t, i) => `${t} · #${i + 1}`), "Dein Exemplar"];
   walkView.show({
     P,
     query,
     labels,
+    taxa: [...species, null],
+    restart: alpha,
     ...traceWalk(P, query, { steps, restart: alpha, random: mulberry32(RESERVOIR_DEFAULTS.seed) }),
   });
 }

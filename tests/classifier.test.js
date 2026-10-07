@@ -23,7 +23,7 @@ import {
   conformalPredict,
   leaveOneOut,
 } from "../classifier/classify.js";
-import { traceWalk } from "../walk.js";
+import { traceWalk, summarizeWalk } from "../walk.js";
 import { gpa, fitLDA, procrustesDistance, pca2 } from "../classifier/morphometrics.js";
 
 const options = {
@@ -161,6 +161,10 @@ test("walk view traces exactly the chain that is scored", () => {
     const mass = labels.reduce((a, l, i) => a + (l === taxon ? last[i] : 0), 0) / refMass;
     assert.ok(Math.abs(mass - (scores[taxon] || 0)) < 1e-9, taxon);
   }
+  const display = summarizeWalk(last, query, [...labels, null]),
+    balanced = rwrScores(ctx, labels, qs);
+  for (const row of display.rows)
+    assert.ok(Math.abs(row.score - (balanced[row.name] || 0)) < 1e-12, row.name);
 });
 test("balanced scoring counters abundance bias", () => {
   const { embeddings, labels } = clusters(60, 6, 4),
@@ -170,6 +174,46 @@ test("balanced scoring counters abundance bias", () => {
   const balanced = rwrScores(ctx, labels, qs).B,
     raw = rwrScores(ctx, labels, qs, undefined, { balanced: false }).B;
   assert.ok(raw > 0 && balanced > raw);
+});
+test("RWR excludes held-out references and balances only the remaining counts", () => {
+  const ctx = similarityContext([[1, 0], [.9, .1], [.8, .2], [0, 1], [.1, .9]]),
+    labels = ["A", "A", "A", "B", "B"],
+    excluded = Uint8Array.from([1, 1, 0, 0, 0]),
+    qs = querySimilarities(ctx, [.6, .4]);
+  for (const k of [1, 7]) {
+    const opts = { k, alpha: .35, steps: 17 },
+      { P, query } = rwrTransitions(ctx, qs, excluded, opts);
+    for (let i = 0; i < P.length; i++) {
+      if (excluded[i]) { assert.deepEqual(P[i], []); continue; }
+      assert.ok(Math.abs(P[i].reduce((sum, [, w]) => sum + w, 0) - 1) < 1e-12);
+      assert.ok(P[i].every(([target, w]) => !excluded[target] && Number.isFinite(w) && w > 0));
+      assert.ok(P[i].length <= k);
+    }
+    const trace = traceWalk(P, query, { steps: opts.steps, restart: opts.alpha, random: () => .5 });
+    for (const distribution of trace.distributions) {
+      assert.equal(distribution[0], 0);
+      assert.equal(distribution[1], 0);
+      assert.ok(Math.abs(distribution.reduce((sum, w) => sum + w, 0) - 1) < 1e-12);
+    }
+    const final = trace.distributions.at(-1),
+      balanced = rwrScores(ctx, labels, qs, excluded, opts),
+      a = final[2], b = (final[3] + final[4]) / 2;
+    assert.ok(Math.abs((balanced.A || 0) - a / (a + b)) < 1e-12);
+    assert.ok(Math.abs((balanced.B || 0) - b / (a + b)) < 1e-12);
+  }
+});
+
+test("non-positive similarities still produce finite stochastic transition rows", () => {
+  const ctx = similarityContext([[1, 0], [-1, 0], [0, 1]]),
+    qs = querySimilarities(ctx, [0, -1]),
+    { P, query } = rwrTransitions(ctx, qs);
+  for (const row of P) {
+    assert.ok(row.every(([, w]) => Number.isFinite(w) && w > 0));
+    assert.ok(Math.abs(row.reduce((sum, [, w]) => sum + w, 0) - 1) < 1e-12);
+  }
+  for (const distribution of traceWalk(P, query).distributions)
+    assert.ok(Math.abs(distribution.reduce((sum, w) => sum + w, 0) - 1) < 1e-12);
+  assert.throws(() => rwrTransitions(ctx, qs, new Uint8Array([1, 1, 1])), /Keine Referenzen/);
 });
 test("grouped leave-one-out prevents duplicate wings from vouching for each other", () => {
   // Every specimen contributes two identical wings; labels are random noise.

@@ -13,13 +13,14 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <a class="skip-link" href="#h-exemplar">Zum Inhalt</a>
   <header class="appbar">
     <a class="brand" href="#exemplar"><img src="icons/wing.svg" alt="" width="26" height="26" />Wingmate</a>
     <nav class="tabs" aria-label="Bereiche">
-      <a href="#exemplar" data-view="exemplar">Exemplar</a>
-      <a href="#ergebnis" data-view="ergebnis">Ergebnis</a>
-      <a href="#referenzen" data-view="referenzen">Referenzen <span class="count" id="refTabCount"></span></a>
-      <a href="#einstellungen" data-view="einstellungen">Einstellungen</a>
+      <a href="#exemplar" data-view="exemplar"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Exemplar</a>
+      <a href="#ergebnis" data-view="ergebnis"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 17 5-5 4 3 7-10M16 5h4v4"/></svg>Ergebnis</a>
+      <a href="#referenzen" data-view="referenzen"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v12H4zM4 6V4h7l2 2h7v2"/></svg>Referenzen <span class="count" id="refTabCount"></span></a>
+      <a href="#einstellungen" data-view="einstellungen"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg>Einstellungen</a>
     </nav>
     <div class="appstatus">
       <span id="pwaStatus" role="status">App läuft im Browser.</span>
@@ -33,30 +34,35 @@
     <section class="view" id="view-exemplar" data-view="exemplar" aria-labelledby="h-exemplar">
       <div class="view-head">
         <div>
-          <h1 id="h-exemplar">Exemplar</h1>
-          <p>Vorderflügel aufnehmen oder laden, prüfen, Landmarken setzen. Danach bestimmen oder als Referenz speichern.</p>
+          <p class="eyebrow">FLÜGELANALYSE</p>
+          <h1 id="h-exemplar">Exemplar untersuchen</h1>
+          <p>Bild hinzufügen, Orientierung prüfen und Wildbienen mit deinen Referenzen vergleichen.</p>
         </div>
-        <button class="ghost" id="clearImagesBtn">Neues Exemplar</button>
+        <button class="ghost" id="clearImagesBtn" hidden>Neues Exemplar</button>
       </div>
 
       <section class="panel" aria-labelledby="h-images">
-        <h2 id="h-images">Bilder</h2>
-        <div class="input-grid">
-          <div class="slot">
+        <div class="panel-head"><div><h2 id="h-images">Flügelbild hinzufügen</h2><p class="mini">Beginne mit einer Aufnahme, auf der die Aderung gut sichtbar ist.</p></div><span class="subtle-badge">01 · Bild</span></div>
+        <div class="input-grid upload-grid">
+          <div class="slot primary-slot">
             <label class="dropzone" for="venInput">
               <input id="venInput" type="file" accept="image/*" />
-              <canvas id="venCanvas" width="640" height="420"></canvas>
-              <span class="dropcopy"><strong>Aderung · Durchlicht</strong><span>für Umriss und Landmarken</span></span>
+              <canvas id="venCanvas" width="640" height="420" aria-label="Vorschau des Aderungsbildes"></canvas>
+              <span class="upload-prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5"/></svg><strong>Flügelbild auswählen</strong><span>Hierher ziehen oder klicken</span></span>
+              <span class="dropcopy"><strong>Aderung</strong><span>Durchlicht · Umriss &amp; Landmarken</span></span>
             </label>
             <div class="slot-actions">
-              <label class="button ghost" for="venInput">Foto wählen</label>
+              <label class="button" for="venInput">Foto wählen</label>
               <button class="ghost" type="button" data-live="venation">Live-Kamera</button>
             </div>
           </div>
+          <details class="optional-upload" id="wipUpload">
+            <summary><span>WIP-Bild ergänzen <span class="subtle-badge">Optional</span></span><span class="mini">Farbiges Interferenzmuster desselben Flügels</span></summary>
           <div class="slot">
             <label class="dropzone" for="wipInput">
               <input id="wipInput" type="file" accept="image/*" />
-              <canvas id="wipCanvas" width="640" height="420"></canvas>
+              <canvas id="wipCanvas" width="640" height="420" aria-label="Vorschau des WIP-Bildes"></canvas>
+              <span class="upload-prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5"/></svg><strong>WIP-Bild auswählen</strong><span>Hierher ziehen oder klicken</span></span>
               <span class="dropcopy"><strong>WIP · Auflicht, schwarzer Grund</strong><span>optional</span></span>
             </label>
             <div class="slot-actions">
@@ -64,19 +70,20 @@
               <button class="ghost" type="button" data-live="wip">Live-Kamera</button>
             </div>
           </div>
+          </details>
         </div>
-        <p class="statusline" id="imageStatus">Noch keine Bilder.</p>
+        <div class="upload-footer"><p class="statusline" id="imageStatus">Noch keine Bilder.</p><button id="qcRestore" class="ghost small">Letztes Exemplar öffnen</button></div>
         <section id="captureCard" class="camera-panel" hidden aria-labelledby="captureTitle"></section>
       </section>
 
-      <section class="panel" aria-labelledby="qcTitle">
+      <div class="empty-state workflow-preview" id="qcEmpty"><span class="subtle-badge">02 · Prüfen</span><div><h2>Vom Bild zur Bestimmung</h2><p>Nach dem Laden prüfst du die Flügelkontur und Orientierung. Landmarken ergänzen die Formanalyse.</p></div></div>
+      <section class="panel" id="qcPanel" aria-labelledby="qcTitle" hidden>
         <div class="panel-head">
           <h2 id="qcTitle">Prüfen &amp; Landmarken</h2>
           <details class="more">
             <summary>Weitere Aktionen</summary>
             <div class="buttonrow smallrow">
               <button id="qcRecalculate" class="ghost">Neu berechnen</button>
-              <button id="qcRestore" class="ghost">Letztes Exemplar öffnen</button>
               <button id="qcExport" class="ghost" disabled>Metadaten &amp; Maske exportieren</button>
               <button id="qcLandmarkCsv" class="ghost" disabled>Landmarken als CSV</button>
               <label class="qc-check"><input id="qcDebug" type="checkbox" /> Achsen und Rahmen einblenden</label>
@@ -102,7 +109,7 @@
       <section class="panel results-card" aria-labelledby="h-graph">
         <div class="results-grid">
           <div>
-            <h2 id="h-graph">Ähnlichkeitsgraph (Random Walk)</h2>
+            <h2 id="h-graph">Ähnlichkeit zu deinen Referenzen</h2>
             <div id="resultBars" class="bars empty">Noch nichts bestimmt. Unter „Exemplar“ ein Bild prüfen, freigeben und „Bestimmen“ wählen.</div>
             <p class="prediction-set" id="predictionSet"></p>
           </div>
@@ -120,22 +127,69 @@
         <p class="mini">Erste zwei Hauptkomponenten der Embeddings; keine phylogenetische Darstellung. Balken oben: Random-Walk-Masse je Taxon, geteilt durch dessen Referenzzahl; grün umrandet = im konformen Vorhersage-Set.</p>
       </details>
       <details class="panel disclosure" id="walkView">
-        <summary>Random Walk Schritt für Schritt</summary>
-        <p class="mini">40 Schritte auf dem Referenzgraphen, 20 % Restart zur Anfrage. Knotengröße und Tabelle zeigen die exakte Verteilung; orange ist ein beispielhafter Walk, gestrichelt ein Restart.</p>
-        <div class="buttonrow">
-          <button data-play disabled>Abspielen</button>
-          <button data-reset class="ghost" disabled>Zum Start</button>
+        <summary>Wie entsteht das Ergebnis? · Markov-Kette</summary>
+        <div class="empty-state walk-empty" data-empty><h3>Die Berechnung sichtbar machen</h3><p>Bestimme ein Exemplar. Hier kannst du danach verfolgen, wie sich die Wahrscheinlichkeit von deinem Flügel auf die Referenzen verteilt.</p></div>
+        <div data-content hidden>
+          <p class="walk-intro">Die Berechnung startet bei deinem Exemplar. In jedem Schritt verteilt sich die Wahrscheinlichkeit entlang der Ähnlichkeiten zu den Referenzen.</p>
+          <p class="walk-rule" data-rule></p>
+          <div class="walk-controls">
+            <div class="buttonrow">
+              <button data-play disabled>Abspielen</button>
+              <button data-prev class="ghost" aria-label="Einen Schritt zurück" disabled>← Zurück</button>
+              <button data-next class="ghost" aria-label="Einen Schritt weiter" disabled>Weiter →</button>
+              <button data-reset class="ghost" disabled>Zum Start</button>
+              <button data-end class="ghost" disabled>Zum Ergebnis</button>
+            </div>
+            <label class="walk-slider"><span data-counter>Schritt 0 / 40</span><input data-step type="range" min="0" max="40" value="0" step="1" aria-label="Schritt der Markov-Kette" disabled /></label>
+          </div>
+          <div class="walk-stats">
+            <div><span>Bei deinem Exemplar</span><strong data-query-mass>—</strong></div>
+            <div><span>Bei den Referenzen</span><strong data-ref-mass>—</strong></div>
+            <div><span>Seit dem letzten Schritt verschoben</span><strong data-change>—</strong></div>
+          </div>
+          <section class="walk-distribution" aria-labelledby="walkDistributionTitle">
+            <h3 id="walkDistributionTitle">Verteilung nach Art</h3>
+            <p class="mini">Der Anteil zeigt die Wahrscheinlichkeit auf allen Referenzen einer Art. Der Ähnlichkeitsscore berücksichtigt zusätzlich die Anzahl ihrer Referenzen.</p>
+            <div class="walk-table taxon-table"><table>
+              <thead><tr><th scope="col">Art / Referenzen</th><th scope="col">Anteil der Verteilung</th><th scope="col">Ähnlichkeitsscore</th></tr></thead>
+              <tbody data-taxa></tbody>
+            </table></div>
+            <p class="mini" data-score-note></p>
+            <details class="disclosure-inline">
+              <summary>Wie wird der Ähnlichkeitsscore berechnet?</summary>
+              <p class="mini">Der Anteil jeder Art wird durch die Anzahl ihrer Referenzen geteilt. Diese Werte werden anschließend auf insgesamt 100 % umgerechnet. So wird eine Art mit vielen Referenzen nicht allein durch ihre Anzahl bevorzugt. Die Wahrscheinlichkeit bei deinem Exemplar zählt dabei nicht mit.</p>
+            </details>
+          </section>
+          <div class="walk-example">
+            <label class="qc-check"><input data-example type="checkbox" checked /> Beispielpfad anzeigen</label>
+            <p class="mini">Orange zeigt einen einzelnen simulierten Weg. Die Verteilung oben wird aus allen möglichen Wegen berechnet.</p>
+            <p data-status role="status" aria-live="polite"></p>
+          </div>
+          <div class="walk-explorer">
+            <div>
+              <h3>Referenzgraph</h3>
+              <p class="mini">Größere Kreise tragen mehr Wahrscheinlichkeit. Wähle einen Knoten, um seine Übergänge zu sehen.</p>
+              <div class="walk-map"><svg data-graph viewBox="0 0 720 460" role="group" aria-label="Interaktiver Referenzgraph. Knoten mit Tab auswählen und mit Enter öffnen."></svg></div>
+              <div class="walk-legend"><span><i class="legend-query"></i>Dein Exemplar</span><span><i class="legend-path"></i>Beispielpfad</span><span class="legend-restart">⇢ Rücksprung zum Exemplar</span></div>
+              <p class="mini" data-limit></p>
+            </div>
+            <section class="walk-inspector" aria-labelledby="walkNodeTitle">
+              <h3 id="walkNodeTitle" data-selected-title>Dein Exemplar</h3>
+              <p class="mini" data-selected-mass></p>
+              <h4>Wohin im nächsten Schritt?</h4>
+              <p class="mini">Übergangschancen von diesem Knoten, einschließlich Rücksprung.</p>
+              <div data-transitions></div>
+            </section>
+          </div>
+          <details class="disclosure-inline walk-node-details">
+            <summary>Alle Knoten · genaue Werte</summary>
+            <p class="mini">Absteigend nach Wahrscheinlichkeit. Änderung in Prozentpunkten gegenüber dem vorherigen Schritt; gerundete Werte.</p>
+            <div class="walk-table"><table>
+              <thead><tr><th scope="col">Referenz / Exemplar</th><th scope="col">Anteil</th><th scope="col">Änderung</th><th scope="col">Beispielpfad</th></tr></thead>
+              <tbody data-nodes></tbody>
+            </table></div>
+          </details>
         </div>
-        <label><span data-counter>Schritt 0 / 40</span>
-          <input data-step type="range" min="0" max="40" value="0" step="1" aria-label="Random-Walk-Schritt" disabled />
-        </label>
-        <p data-status role="status">Nach einer Bestimmung erscheint hier der Walk.</p>
-        <svg data-graph viewBox="0 0 720 420" role="img" aria-label="Referenzgraph mit Wahrscheinlichkeiten und aktuellem Walk-Schritt"></svg>
-        <p class="mini" data-limit></p>
-        <div class="walk-table"><table>
-          <thead><tr><th scope="col">Knoten / Exemplar</th><th scope="col">Wahrscheinlichkeit</th><th scope="col">Walk</th></tr></thead>
-          <tbody data-nodes></tbody>
-        </table></div>
       </details>
     </section>
 
@@ -147,6 +201,7 @@
           <p>Sicher bestimmte Exemplare sind die Trainingsdaten. Neue Referenzen unter „Exemplar“ nach dem Freigeben speichern.</p>
         </div>
       </div>
+      <div class="empty-state" id="referenceEmpty"><div class="empty-symbol" aria-hidden="true">＋</div><h2>Deine Sammlung beginnt hier</h2><p>Füge sicher bestimmte Exemplare hinzu oder importiere eine vorhandene Sammlung. Für eine Bestimmung brauchst du Referenzen aus mindestens zwei Arten.</p><a class="button" href="#exemplar">Exemplar hinzufügen</a></div>
       <section class="panel" aria-labelledby="h-collection">
         <div class="panel-head">
           <h2 id="h-collection">Sammlung</h2>
@@ -173,12 +228,14 @@
       <div class="view-head">
         <div>
           <h1 id="h-einstellungen">Einstellungen</h1>
-          <p>Aufnahme-Rig, Rechenraum und App. Alles läuft lokal; Bilder verlassen das Gerät nicht.</p>
+          <p>App und Analyse anpassen. Deine Bilder und Referenzen bleiben auf diesem Gerät.</p>
         </div>
       </div>
       <section class="panel" id="rigCard" aria-labelledby="rigTitle"></section>
 
-      <section class="panel" aria-labelledby="h-reservoir">
+      <details class="panel disclosure" id="analysisSettings">
+        <summary>Erweiterte Analyse-Einstellungen</summary>
+        <section aria-labelledby="h-reservoir">
         <div class="panel-head">
           <h2 id="h-reservoir">Rechenraum (Reservoir)</h2>
           <span id="modeBadge" hidden></span>
@@ -209,6 +266,8 @@
         <p class="mini" id="graphStatus">Kein Graph geladen. Die Zuordnung Merkmal → Neuron ist willkürlich; der Graphmodus testet nur Topologie.</p>
       </section>
 
+      </details>
+
       <section class="panel" aria-labelledby="h-app">
         <h2 id="h-app">App</h2>
         <p class="mini" id="installHint">Installieren: im Browsermenü „App installieren“ oder auf iPhone/iPad „Teilen → Zum Home-Bildschirm“.</p>
@@ -216,8 +275,8 @@
         <span id="footerState" hidden></span>
       </section>
 
-      <section class="panel" aria-labelledby="h-method">
-        <h2 id="h-method">Methodik</h2>
+      <details class="panel disclosure" aria-labelledby="h-method">
+        <summary id="h-method">Methodik &amp; Grenzen</summary>
         <dl class="method-list">
           <dt>Form &amp; WIP</dt><dd>Umrissprofil der Maske; CIELAB je Zelle (8 × 4) und chroma-gewichtetes Farbtonhistogramm, nur Membranpixel.</dd>
           <dt>Venation</dt><dd>Gradientenorientierung und relative Dunkelheit je Zelle, beleuchtungsnormiert, ohne Konturrand.</dd>
@@ -226,8 +285,9 @@
           <dt>Bestimmung</dt><dd>kNN-Graph mit Random Walk with Restart; unbekannte Arten über label-bedingte konforme Vorhersage.</dd>
         </dl>
         <p class="warning">Methoden-Prototyp. Auf 814 realen <i>Bombus</i>-Flügeln ist Procrustes + LDA besser als der Graph-Klassifikator, und FlyHash schlägt die Kontrolle ohne Reservoir nicht (<code>test-data/landmark-benchmark.json</code>).</p>
-      </section>
+      </details>
     </section>
+    <footer class="workspace-footer"><span>Wingmate · Wildbienen am Flügel bestimmen</span><span><span class="privacy-dot" aria-hidden="true"></span> Lokal auf deinem Gerät</span></footer>
   </main>
 
   <!-- Next step for the current specimen -->
@@ -256,9 +316,9 @@
     </form>
     <div class="nextbar-inner">
       <ol class="steps" id="flowSteps" aria-label="Fortschritt">
-        <li data-step="image">Bild</li>
-        <li data-step="qc">Geprüft</li>
-        <li data-step="landmarks">Landmarken <span id="lmCount"></span></li>
+        <li data-step="image" data-state="active">Bild</li>
+        <li data-step="qc" data-state="todo">Geprüft</li>
+        <li data-step="landmarks" data-state="todo">Landmarken <span id="lmCount"></span></li>
       </ol>
       <p class="nextbar-hint" id="nextHint" role="status" aria-live="polite">Venationsbild laden oder mit der Live-Kamera aufnehmen.</p>
       <div class="nextbar-actions">

@@ -74,7 +74,9 @@ Installationsvoraussetzungen: [MDN – Making PWAs installable](https://develope
 
 Alle Bilder und Referenzen bleiben lokal. Referenzen werden im Browser-`localStorage` gespeichert und können als JSON exportiert werden.
 
-Nach einer Klassifikation zeigt **Random-Walk erkunden** die Markov-Kette auf dem Referenzgraphen. Mit **Abspielen**, **Pause**, **Zum Start** und dem Schrittregler lassen sich die Schritte 0–40 untersuchen. Die Knotengröße und Tabelle zeigen die exakte Wahrscheinlichkeitsverteilung einschließlich der Anfrage; Orange zeigt eine reproduzierbare Beispieltrajektorie mit 20 % Restart-Wahrscheinlichkeit. Die finalen Taxon-Scores werden weiterhin aus der Verteilung berechnet und auf die Referenzmasse normiert. Bei mehr als 36 Knoten zeigt der Graph eine Auswahl; die Tabelle und Berechnung enthalten alle Knoten. Änderungen an Eingaben, Referenzen oder Reservoir-Einstellungen setzen die Ansicht zurück. Dargestellt wird der Klassifikationsgraph, nicht die interne FlyWire-Propagation.
+Nach einer Klassifikation erklärt **Wie entsteht das Ergebnis? · Markov-Kette** die Berechnung. Mit **Abspielen**, **Zurück**, **Weiter**, **Zum Start**, **Zum Ergebnis** und dem Schrittregler lassen sich die Schritte 0–40 untersuchen. Drei Kennzahlen zeigen die Wahrscheinlichkeit beim eigenen Exemplar, bei den Referenzen und den seit dem letzten Schritt verschobenen Anteil. Die Artentabelle trennt die rohe Wahrscheinlichkeit von den nach Referenzzahl ausgeglichenen Ähnlichkeitsscores; die Scores des letzten Schritts entsprechen den Random-Walk-Balken im Ergebnis.
+
+Im Graphen bleiben Positionen und Farben während der Wiedergabe gleich. Ein Klick auf einen Knoten (oder Tab und Enter) zeigt seine Übergangschancen einschließlich des 20-%-Rücksprungs. **Beispielpfad anzeigen** schaltet einen reproduzierbaren simulierten Weg ein: Orange zeigt den Weg, gestrichelt einen Rücksprung. Dieser einzelne Weg bestimmt nicht die berechnete Verteilung. Bei großen Sammlungen zeigt der Graph bis zu 25 Knoten am Desktop bzw. 13 auf schmalen Ansichten; **Alle Knoten · genaue Werte** enthält sämtliche Knoten, Wahrscheinlichkeiten und Änderungen in Prozentpunkten. Änderungen an Eingaben, Referenzen oder Reservoir-Einstellungen setzen die Ansicht zurück. Dargestellt wird der Klassifikationsgraph, nicht die interne FlyWire-Propagation.
 
 ## Step 0 · Smartphone-Aufnahme & Rig (rig-profile-1)
 
@@ -268,6 +270,7 @@ einen ersten eigenen Datensatz kryptischer Arten.
 
 ```bash
 npm test                                           # Node: Normalisierung, Klassifikation, Walk
+NODE_PATH=… node scripts/markov-ui-e2e.cjs        # Browser: Markov-Anzeige, Daten, Steuerung, Desktop/Handy
 NODE_PATH=… node scripts/classifier-e2e.cjs        # Browser: QC → Referenzen → Klassifikation → Walk → Validierung
 NODE_PATH=… node scripts/camera-e2e.cjs            # Browser, Fake-Kamera: Rig kalibrieren → Neustart → Aufnahme → QC
 NODE_PATH=… node scripts/landmark-e2e.cjs          # Browser, 7 reale Flügel: 19 Landmarken per UI, Lupe, LDA, CSV

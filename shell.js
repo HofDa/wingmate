@@ -22,6 +22,7 @@ function show(view, { focus = false } = {}) {
   // The next-step bar belongs to the specimen workflow only.
   bar.hidden = view !== "exemplar";
   document.body.dataset.view = view;
+  $(".skip-link").href = `#h-${view}`;
   if (location.hash !== "#" + view) history.replaceState(null, "", "#" + view);
   if (focus) $(`#view-${view} h1`)?.focus({ preventScroll: true });
 }
@@ -33,6 +34,12 @@ for (const link of document.querySelectorAll(".tabs a, .brand"))
     window.scrollTo({ top: 0 });
   });
 for (const h of document.querySelectorAll("main > .view h1")) h.tabIndex = -1;
+$(".skip-link").addEventListener("click", (event) => {
+  event.preventDefault();
+  const heading = $(`#view-${document.body.dataset.view} h1`);
+  heading.focus();
+  heading.scrollIntoView({ block: "start" });
+});
 
 // ---------- next step ----------
 let accepted = false;
@@ -55,6 +62,13 @@ window.addEventListener("wing-preprocessing-change", ({ detail }) => {
     failed = items.some((i) => i.error),
     unconfirmed = items.some((i) => i.result && !i.options.standardConfirmed);
   accepted = items.length > 0 && items.every((i) => i.accepted);
+  $("#clearImagesBtn").hidden = !items.length;
+  $("#qcPanel").hidden = !items.length;
+  $("#qcEmpty").hidden = !!items.length;
+  for (const [type, input] of [["venation", "venInput"], ["wip", "wipInput"]]) {
+    $("#" + input).closest(".dropzone").classList.toggle("has-image", !!detail.items[type]);
+  }
+  if (detail.items.wip) $("#wipUpload").open = true;
 
   setStep("image", items.length ? "done" : "active");
   setStep("qc", accepted ? "done" : items.length ? "active" : "todo");
@@ -92,11 +106,27 @@ window.addEventListener("wing-reference-added", ({ detail }) => {
 });
 window.addEventListener("wing-references-change", ({ detail }) => {
   $("#refTabCount").textContent = detail.count ? String(detail.count) : "";
+  $("#referenceEmpty").hidden = detail.count > 0;
+  $("#exportBtn").disabled = $("#clearRefsBtn").disabled = !detail.count;
 });
 // app.js registers its classify handler first (module order); then switch view.
 classifyBtn.addEventListener("click", () => show("ergebnis"));
 
 // app.js loaded the references before this module registered its listener.
 $("#refTabCount").textContent = window.wingClassifier?.state.references.length || "";
+const referenceCount = window.wingClassifier?.state.references.length || 0;
+$("#referenceEmpty").hidden = referenceCount > 0;
+$("#exportBtn").disabled = $("#clearRefsBtn").disabled = !referenceCount;
+// Reserve the actual height, including the expanded reference form and
+// wrapped mobile instructions, so the last control remains reachable.
+new ResizeObserver(() => {
+  document.documentElement.style.setProperty("--nextbar-height", `${bar.getBoundingClientRect().height}px`);
+}).observe(bar);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !form.hidden) {
+    closeForm();
+    refToggle.focus();
+  }
+});
 show(location.hash.slice(1) || "exemplar");
 window.wingShell = { show };
