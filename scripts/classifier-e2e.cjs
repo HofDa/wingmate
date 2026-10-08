@@ -27,6 +27,8 @@ const { chromium } = require("playwright");
       window.wingQC.items.venation.options.standardConfirmed = true;
       await window.wingQC.recalculate();
     }, file);
+    const review = page.getByRole("textbox", { name: "Venation: Begründung der Freigabe" });
+    if (await review.count()) await review.fill("Published difficult-image fixture; software workflow check only.");
     await page.click("#qcAccept");
     await page.waitForFunction(() => window.wingQC.items.venation?.accepted);
     if (species) {
@@ -54,6 +56,7 @@ const { chromium } = require("playwright");
     for (const f of files) await accept(f, species);
   const stored = await page.evaluate(() => window.wingClassifier.state.references.length);
   await accept("lucorum-M-BUM0451_SEG28A-R.dw.png", null);
+  if (await page.inputValue("#specimenInput")) throw Error("New query inherited the previous animal ID");
   await page.click("#classifyBtn");
   const result = await page.evaluate(() => ({
     status: document.querySelector("#classifyStatus").textContent,
@@ -98,6 +101,7 @@ const { chromium } = require("playwright");
     result.playEnabled &&
     result.walkAfterChange === 0 &&
     result.validation.length === 3 &&
+    result.validation[0].startsWith("Distanz-kNN") &&
     !errors.length;
   process.exit(ok ? 0 : 1);
 })();

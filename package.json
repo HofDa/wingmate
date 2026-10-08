@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:apis-references": "python3 scripts/build-apis-references.py",
+    "build:starter": "node scripts/build-bombus-starter.mjs",
     "build:pages": "node scripts/build-pages.js",
     "test": "node --test tests/*.test.js",
     "serve": "python3 -m http.server 8000",

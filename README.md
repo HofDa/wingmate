@@ -4,17 +4,19 @@ Lokaler Forschungsprototyp für Wildbienen-ID aus **Wing Interference Patterns (
 
 
 **Benutzerhandbuch:** [docs/Benutzerhandbuch.md](docs/Benutzerhandbuch.md) – Bedienung Schritt für Schritt, Rig, Landmarken, Training, Fehlerbehebung.
+**Modellentwicklung:** [docs/model-development.md](docs/model-development.md) – tierbasierte Auswertung, Distanzkalibrierung und unabhängige Tests.
+**Optionales Startmodell:** [models/bombus-starter/README.md](models/bombus-starter/README.md) – Landmarken-LDA für drei Bombus-Arten, numerische Referenzdaten und ODbL-Zitation.
 **Aufnahme-Rig zum Drucken:** [rig/README.md](rig/README.md) – parametrisches OpenSCAD-Modell, STL, Teileliste, Montage.
 
 ## Pipeline
 
-1. Zwei Bilder desselben Vorderflügels (ideal: Reflexionslicht für WIP + Durchlicht für Aderung)
-2. Transparente, leichte Bildmerkmale im Browser
-3. Drosophila-inspiriertes Mushroom-Body-Reservoir (sparse expansion + Winner-take-all)
-4. Optional: echter gerichteter FlyWire/Codex-Subgraph
-5. Referenzgraph aus sicher bestimmten Exemplaren
-6. Random Walk with Restart + Labelaggregation
-7. Open-set-Heuristik für Exemplare außerhalb des bekannten Referenzraums
+1. Venationsbild und optional WIP desselben Vorderflügels, mit dokumentierter QC
+2. Flügelmerkmale und optionale manuelle Landmarken im passenden anatomischen Schema
+3. Ein Referenzprototyp pro Tier aus seinen unterschiedlichen Flügelansichten
+4. Standard: Procrustes/PCA/LDA mit Landmarken, sonst Distanz-kNN auf standardisierten Merkmalen
+5. Separate Tier-Kalibrierung anhand von Merkmalsdistanzen; live nur explorative Typikalität
+6. Cosine-kNN, FlyHash und Random Walk als Entwicklungsvergleiche
+7. Abschlusstest an unabhängigen Tieren und ungesehenen Taxa außerhalb der Entwicklung
 
 ## Start
 
@@ -189,10 +191,11 @@ Unter **Referenzen → Modell trainieren** (`classifier/model.js`, läuft im Wor
    Anpassung von Ausrichtung, Standardisierung, PCA oder LDA. Ein fester FlyHash lernt keine
    Bildmerkmale. Fehlende Modalitäten erfordern eine explizite Wahl des Eingabemodus.
 3. **Bewertung** aller Verfahren mit denselben stratifizierten, nach Exemplar gruppierten
-   5 Falten, mit neu angepasster Pipeline pro Trainingsfold; das beste (balancierte Genauigkeit)
-   wird Standard. Das sind Auswahlwerte, kein unabhängiger Abschlusstest. Haben alle Referenzen eine Serie,
+   5 Falten, mit neu angepasster Pipeline pro Trainingsfold. Landmarken-LDA ist Standard,
+   sonst Distanz-kNN; andere Verfahren bleiben Vergleiche. Jedes Tier zählt einmal, Flügelwerte
+   stehen getrennt im Export. Die Intervalle resampeln Tiere. Das sind Entwicklungswerte, kein unabhängiger Abschlusstest. Haben alle Referenzen eine Serie,
    zusätzlich **Transfer auf ungesehene Serien** (jeweils eine Serie zurückgehalten).
-4. Das Modell wird gespeichert (IndexedDB), ist exportier-/importierbar (`wingmate-model-2`,
+4. Das Modell wird gespeichert (IndexedDB), ist exportier-/importierbar (`wingmate-model-3`,
    JSON) und bestimmt, solange aktiv, alle neuen Tiere; neue Flügel richtet es per Procrustes an
    der gespeicherten Mittelform aus. Geänderte Referenzen werden angezeigt – dann neu trainieren.
 
@@ -232,7 +235,8 @@ Code in `classifier/` (reine ES-Module, in Node getestet), UI in `app.js`, Marko
    Umrissprofil (66), Venation als HOG-artige Orientierungshistogramme + relative Dunkelheit
    je 8 × 4-Zelle ohne Konturrand (288), WIP als CIELAB je Zelle + chroma-gewichtetes
    Farbtonhistogramm (112). Keine Farbkorrektur; Aufnahmebedingungen müssen fix sein.
-2. **Standardisierung** auf den Referenzen (z-Score, jeder Block gleich gewichtet).
+2. **Standardisierung** auf einem Prototyp je Trainingstier (z-Score, jeder Block gleich gewichtet).
+   Identische Wiederholungen werden entfernt, unterschiedliche Ansichten innerhalb eines Tieres gemittelt.
    Referenzen speichern **Merkmale, keine Embeddings**; bei jeder Klassifikation wird
    alles mit denselben Einstellungen neu eingebettet (alte v1-Embedding-Referenzen werden
    erkannt und nicht verwendet).
@@ -245,7 +249,9 @@ Code in `classifier/` (reine ES-Module, in Node getestet), UI in `app.js`, Marko
    Taxon. `rwrTransitions` liefert dieselbe Übergangsmatrix an die Markov-Ansicht; ein Test
    prüft, dass `traceWalk` exakt die bewertete Verteilung reproduziert.
 5. **Open-set** im eingefrorenen Modell: label-bedingte Split-Kalibrierung gegen getrennte
-   Tiere. Mehrere Flügel eines Kalibrierungstieres ergeben nur einen (maximalen) Score; auch die
+   Tiere. Der Score misst euklidische Distanzen in den standardisierten Merkmalen ohne
+   L2-Normalisierung; damit bleiben extreme Abweichungen entlang bekannter Richtungen sichtbar.
+   Mehrere Flügel eines Kalibrierungstieres ergeben nur einen (maximalen) Score; auch die
    Nachbarschaft zählt Tiere, nicht doppelte Flügel. Bei ε = 0,1 sind mindestens neun unabhängige
    **Kalibrierungstiere je Taxon** für die nötige p-Wert-Auflösung erforderlich. Darunter meldet
    die UI unzureichende Kalibrierung. Live-Jackknife bleibt ausdrücklich explorativ und darf keine
@@ -258,8 +264,9 @@ Code in `classifier/` (reine ES-Module, in Node getestet), UI in `app.js`, Marko
 ### Benchmark auf realen Daten
 
 `node scripts/landmark-benchmark.js --out test-data/landmark-benchmark.json` nutzt
-814 Landmarkdatensätze (423 Exemplare, 3 *Bombus*-Arten). Version 2 prüft die
-**Klassifikationsstufe** mit identischen fünf gruppierten Folds, getrennter Tier-Kalibrierung und
+814 Landmarkdatensätze (423 Exemplare, 3 *Bombus*-Arten). Version 3 prüft die
+**Klassifikationsstufe** mit Tierprototypen, Tierergebnissen und Bootstrap-Intervallen in
+identischen fünf gruppierten Folds, getrennter Tier-Kalibrierung und
 Procrustes/Skalierung/PCA/LDA ausschließlich im Trainingsfold. Die innere Temperaturkalibrierung
 hält ebenfalls ganze Tiere zurück und passt die Ausrichtung neu an.
 
@@ -390,3 +397,13 @@ node scripts/real-invariance.cjs
 Ein geeignetes reales, kontrolliertes Wildbienen-WIP/Venation-Paar ist derzeit
 nicht enthalten. WIP-Farberhalt wird synthetisch geprüft; biologische Paar-
 registrierung und vollautomatische Seiten-/Basisbestimmung bleiben zu validieren.
+## Apis mellifera reference data
+
+An optional [honeybee numeric collection](models/apis-source/README.md) now
+ships alongside the Bombus starter: 29,043 source wings from 1,342 colonies in
+ten countries, under [ODbL 1.0 with attribution](models/apis-source/NOTICE.md).
+The adapted collection selects one wing per colony; unchanged source CSVs,
+publisher checksums and an offline build recipe are included. Rebuild with
+`npm run build:apis-references`. The training panel offers the collection download.
+Its Nawrocka (2018) numbering differs from the Bombus guide, so this is reference
+data pending a verified anatomical mapping, rather than a combined classifier.

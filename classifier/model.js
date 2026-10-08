@@ -1,6 +1,6 @@
 // Training mode: fit every component once on the labelled references,
-// evaluate with stratified grouped k-fold cross-validation, pick the best
-// method, and freeze the result as a versioned, serialisable model.
+// evaluate with stratified grouped k-fold cross-validation, apply the fixed
+// default-method policy, and freeze a versioned, serialisable model.
 //
 // A frozen model does not change when references are added; retrain to
 // include them. Queries are aligned to the model's stored landmark mean
@@ -11,18 +11,22 @@ import {
   querySimilarities,
   rwrScores,
   knnScores,
+  distanceScores,
   argmax,
   splitCalibrate,
   conformalPredict,
 
-  summarize,
+  summarizeAnimals,
   CLASSIFIER_DEFAULTS,
 } from "./classify.js";
 import { gpa, alignToMean, fitCalibratedShapeLDA, fitShapeLDA, shapeLDAFromParams } from "./morphometrics.js";
 
-export const MODEL_VERSION = "wingmate-model-2";
+export const MODEL_VERSION = "wingmate-model-3";
 export const READY_SPECIMENS = 10; // dataset-size heuristic; not a calibration guarantee
+import { animalReferences, distinctViews, ANIMAL_POLICY, viewKey } from "./specimens.js";
+
 const METHODS = {
+  distance: "Distanz-kNN (standardisierte Merkmale, unabhängige Tiere)",
   lda: "Procrustes + PCA + LDA (Landmarken)",
   rwr: "Random Walk (kNN-Graph)",
   knn: "kNN-Abstimmung",
@@ -55,10 +59,10 @@ export function stratifiedGroupFolds(labels, groups, k = 5, seed = 1) {
   return Int32Array.from(groups, (g) => foldOf.get(g));
 }
 
-// Order-independent fingerprint of a reference set (FNV-1a over sorted ids).
+// Order-independent fingerprint of reference identities, features and provenance.
 export function referenceFingerprint(ids) {
   let h = 2166136261 >>> 0;
-  const entries = ids.map((r) => typeof r === "string" ? r : JSON.stringify({ id: r.id, species: r.species, group: r.group, sex: r.sex, series: r.series, features: r.features })).sort();
+  const entries = ids.map((r) => typeof r === "string" ? r : JSON.stringify({ id: r.id, species: r.species, group: r.group, sex: r.sex, series: r.series, features: r.features, sourceHashes: r.sourceHashes })).sort();
   for (const id of entries) for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619) >>> 0;
   return `${ids.length}:${h.toString(16)}`;
 }
@@ -139,8 +143,9 @@ export function resolveBlocks(features, selected = null) {
 
 // All learned transforms belong exclusively to these training references.
 export function fitReferenceSpace(refs, settings = {}) {
-  const { mode = "fly", params = {}, graph = null } = settings;
-  const features = refs.map((r) => r.features), blocks = resolveBlocks(features, settings.blocks);
+  const { mode = "none", params = {}, graph = null } = settings;
+  const blocks = resolveBlocks(refs.map((r) => r.features), settings.blocks);
+  const animals = animalReferences(refs, blocks), features = animals.map((r) => r.features);
   const configs = blocks.includes("landmarks") ? features.map((f) => configOf(f.blocks.landmarks)) : null;
   const alignment = configs ? gpa(configs) : null;
   const prepare = (f) => alignment
@@ -148,13 +153,16 @@ export function fitReferenceSpace(refs, settings = {}) {
     : f;
   const prepared = features.map(prepare), standardizer = fitStandardizer(prepared, blocks);
   const embed = makeEmbedder(mode, standardizer.dim, params, graph);
+  if (![...standardizer.params.weight].some((w) => w > 0)) throw Error("Keine messbare Merkmalsvariation zwischen unabhängigen Exemplaren.");
   const vectors = prepared.map((f) => standardizer.transform(f)), embeddings = vectors.map(embed);
   return {
-    blocks, configs, alignment, standardizer, vectors, embeddings,
+    blocks, configs, alignment, standardizer, vectors, embeddings, animals,
     X: alignment ? prepared.map((f) => f.blocks.landmarks) : null,
+    toVector: (f) => { resolveBlocks([features[0], f], blocks); return standardizer.transform(prepare(f)); },
     toEmbedding: (f) => { resolveBlocks([features[0], f], blocks); return embed(standardizer.transform(prepare(f))); },
     landmarkVector: (f) => prepare(f).blocks.landmarks,
-    ctx: similarityContext(embeddings), labels: refs.map((r) => r.species), groups: refs.map((r) => r.group),
+    ctx: similarityContext(embeddings), distanceCtx: similarityContext(vectors, "euclidean"),
+    labels: animals.map((r) => r.species), groups: animals.map((r) => r.group),
   };
 }
 
@@ -179,31 +187,42 @@ export function calibrationSplit(refs, fraction = 0.2, seed = 17) {
 function fitPipeline(refs, settings) {
   const split = calibrationSplit(refs, settings.calibrationFraction ?? 0.2);
   const space = fitReferenceSpace(split.training, settings);
-  const calibration = splitCalibrate(space.ctx, space.labels, space.groups,
-    split.calibration.map((r) => space.toEmbedding(r.features)),
+  const calibration = splitCalibrate(space.distanceCtx, space.labels, space.groups,
+    split.calibration.map((r) => space.toVector(r.features)),
     split.calibration.map((r) => r.species), split.calibration.map((r) => r.group), settings.classifier);
   const lda = !space.X || settings.includeLDA === false ? null
     : settings.calibrateLDA === false ? fitShapeLDA(space.X, space.labels)
     : fitCalibratedShapeLDA(space.X, space.labels, space.groups, { landmarkConfigs: space.configs });
-  return { ...space, ...split, calibration, lda };
+  return { ...space, training: space.animals, trainingViews: split.training, calibration, lda };
 }
 function predictPipeline(pipeline, features, classifier) {
   const qs = querySimilarities(pipeline.ctx, pipeline.toEmbedding(features));
   return {
     rwr: rwrScores(pipeline.ctx, pipeline.labels, qs, undefined, classifier),
     knn: knnScores(pipeline.ctx, pipeline.labels, qs, undefined, classifier),
+    distance: distanceScores(pipeline.distanceCtx, pipeline.labels, querySimilarities(pipeline.distanceCtx, pipeline.toVector(features)), undefined, classifier),
     lda: pipeline.lda?.predictProba(pipeline.landmarkVector(features)) ?? null,
-    conformal: conformalPredict(qs, pipeline.labels, pipeline.calibration, undefined, { ...classifier, referenceGroups: pipeline.groups }),
+    conformal: conformalPredict(querySimilarities(pipeline.distanceCtx, pipeline.toVector(features)), pipeline.labels, pipeline.calibration, undefined, { ...classifier, referenceGroups: pipeline.groups }),
   };
 }
 
 export function evaluateReferences(refs, settings = {}, onProgress = () => {}) {
   if (refs.some((r) => r.group === null || r.group === undefined || r.group === "")) throw Error("Validierung braucht eine stabile Exemplar-ID für jede Referenz.");
-  const labels = refs.map((r) => r.species), groups = refs.map((r) => r.group);
   const blocks = resolveBlocks(refs.map((r) => r.features), settings.blocks);
+  const sourceAnimals = new Map(), animalSeries = new Map();
+  for (const r of refs) {
+    if (!animalSeries.has(r.group)) animalSeries.set(r.group, new Set());
+    animalSeries.get(r.group).add(r.series || null);
+    for (const hash of r.sourceHashes ?? Object.values(r.preprocessing?.images ?? {}).map((i) => i.sourceSha256).filter(Boolean)) {
+      if (sourceAnimals.has(hash) && sourceAnimals.get(hash) !== r.group) throw Error("Dasselbe Quellbild wurde mehreren Exemplar-IDs zugeordnet.");
+      sourceAnimals.set(hash, r.group);
+    }
+  }
+  refs = distinctViews(refs, blocks);
+  const labels = refs.map((r) => r.species), groups = refs.map((r) => r.group);
   const foldCount = Math.max(2, Math.min(settings.folds ?? 5, new Set(groups).size));
   const fold = stratifiedGroupFolds(labels, groups, foldCount);
-  const predictions = { rwr: Array(refs.length).fill(null), knn: Array(refs.length).fill(null),
+  const predictions = { distance: Array(refs.length).fill(null), rwr: Array(refs.length).fill(null), knn: Array(refs.length).fill(null),
     ...(blocks.includes("landmarks") && settings.includeLDA !== false ? { lda: Array(refs.length).fill(null) } : {}) };
   const probabilities = Array(refs.length).fill(null), conformal = Array(refs.length).fill(null);
   const evaluateHoldout = (held, target, withCalibration = false) => {
@@ -224,31 +243,23 @@ export function evaluateReferences(refs, settings = {}, onProgress = () => {}) {
   }
   const evaluation = {
     folds: foldCount, protocol: "nach Exemplar gruppiert; alle Anpassungen nur im Trainingsfold",
-    selectionOnly: true,
-    methods: Object.fromEntries(Object.entries(predictions).map(([k, p]) => [k, { name: METHODS[k], ...summarize(labels, p) }])),
+    selectionOnly: false, developmentOnly: true, unit: "animal",
+    methods: Object.fromEntries(Object.entries(predictions).map(([k, p]) => [k, { name: METHODS[k], ...summarizeAnimals(labels, p, groups) }])),
   };
-  if (predictions.lda && settings.calibrateLDA !== false) evaluation.ldaCalibration = calibrationStats(probabilities, labels);
-  const valid = conformal.filter((r) => r?.openSetValid);
-  evaluation.conformal = {
-    protocol: "split-specimen-max", epsilon: settings.classifier?.epsilon ?? CLASSIFIER_DEFAULTS.epsilon,
-    knownQueries: conformal.filter(Boolean).length, validQueries: valid.length,
-    coverage: valid.length ? conformal.reduce((n, r, i) => n + (r?.openSetValid && r.set.includes(labels[i]) ? 1 : 0), 0) / valid.length : null,
-    falseUnknownRate: valid.length ? valid.filter((r) => r.unknown).length / valid.length : null,
-    meanSetSize: valid.length ? valid.reduce((n, r) => n + r.set.length, 0) / valid.length : null,
-    novelTaxon: {},
-  };
+  if (predictions.lda && settings.calibrateLDA !== false) evaluation.ldaCalibration = calibrationStats(probabilities, labels, groups);
+  evaluation.conformal = summarizeConformal(conformal, labels, groups, settings.classifier);
   const series = refs.map((r) => r.series || null);
-  if (series.every(Boolean) && new Set(series).size >= 2) {
+  if (series.every(Boolean) && new Set(series).size >= 2 && [...animalSeries.values()].every((s) => s.size === 1)) {
     const transfer = Object.fromEntries(Object.keys(predictions).map((k) => [k, Array(refs.length).fill(null)]));
     for (const held of new Set(series)) evaluateHoldout((r) => r.series === held, transfer);
     evaluation.seriesTransfer = { series: new Set(series).size,
-      methods: Object.fromEntries(Object.entries(transfer).map(([k, p]) => [k, { name: METHODS[k], ...summarize(labels, p) }])) };
-  }
+      methods: Object.fromEntries(Object.entries(transfer).map(([k, p]) => [k, { name: METHODS[k], ...summarizeAnimals(labels, p, groups) }])) };
+  } else evaluation.seriesTransferUnavailable = "Serientransfer braucht mindestens zwei vollständige Serien und genau eine Serie pro Tier.";
   return evaluation;
 }
 
 export function trainModel(refs, settings = {}, onProgress = () => {}) {
-  const { mode = "fly", params = {}, name = "Modell" } = settings;
+  const { mode = "none", params = {}, name = "Modell" } = settings;
   if (mode === "graph") throw Error("Der FlyWire-Graphmodus ist explorativ und wird nicht eingefroren.");
   if (new Set(refs.map((r) => r.species)).size < 2) throw Error("Training braucht mindestens zwei Taxa.");
   if (refs.some((r) => r.group === null || r.group === undefined || r.group === "")) throw Error("Training braucht eine stabile Exemplar-ID für jede Referenz.");
@@ -258,9 +269,8 @@ export function trainModel(refs, settings = {}, onProgress = () => {}) {
   const classifier = { ...CLASSIFIER_DEFAULTS, ...settings.classifier };
   const resolved = { ...settings, mode, params: { ...RESERVOIR_DEFAULTS, ...params }, blocks, classifier };
   const evaluation = evaluateReferences(refs, resolved, onProgress);
-  const ranked = Object.entries(evaluation.methods).filter(([, m]) => m.balancedAccuracy !== null)
-    .sort((a, b) => b[1].balancedAccuracy - a[1].balancedAccuracy || ["lda", "rwr", "knn"].indexOf(a[0]) - ["lda", "rwr", "knn"].indexOf(b[0]));
-  if (!ranked.length) throw Error("Keine auswertbaren Folds. Mehr unabhängige Exemplare pro Taxon ergänzen.");
+  const primary = settings.primaryMethod ?? (evaluation.methods.lda ? "lda" : "distance");
+  if (!evaluation.methods[primary] || evaluation.methods[primary].balancedAccuracy === null) throw Error("Keine auswertbaren Folds. Mehr unabhängige Exemplare pro Taxon ergänzen.");
   onProgress(0.9, "Endmodell und unabhängige Kalibrierung anpassen");
   const pipeline = fitPipeline(refs, resolved), dim = pipeline.standardizer.dim;
   const packed = new Float32Array(pipeline.training.length * dim);
@@ -271,29 +281,56 @@ export function trainModel(refs, settings = {}, onProgress = () => {}) {
     preprocessingVersion: settings.preprocessingVersion ?? null, blocks,
     landmarkScheme: blocks.includes("landmarks") ? refs[0].features.landmarkScheme : null,
     reservoir: { mode, params: resolved.params }, classifier,
+    animalPolicy: ANIMAL_POLICY, primaryPolicy: settings.primaryMethod ? "explicit-development-method" : "landmarks-first-distance-fallback",
     references: { count: refs.length, fingerprint: referenceFingerprint(refs), ids: refs.map((r) => r.id),
-      trainingIds: pipeline.training.map((r) => r.id), calibrationGroups: pipeline.calibration.groups,
-      trainingCount: pipeline.training.length, calibrationSpecimens: pipeline.calibration.groups.length },
+      trainingIds: pipeline.trainingViews.map((r) => r.id), calibrationGroups: pipeline.calibration.groups,
+      trainingCount: pipeline.training.length, trainingViewCount: pipeline.trainingViews.length, calibrationSpecimens: pipeline.calibration.groups.length },
+    provenance: refs.map((r) => ({ id: r.id, group: r.group, series: r.series ?? null, featureKey: viewKey(r, blocks),
+      sourceHashes: r.sourceHashes ?? Object.values(r.preprocessing?.images ?? {}).map((i) => i.sourceSha256).filter(Boolean) })),
     taxa: readiness(refs), standardizer: pipeline.standardizer.params, vectors: packed,
     labels: pipeline.labels, groups: pipeline.groups, calibration: pipeline.calibration,
     landmarkMean: pipeline.alignment ? Float32Array.from(flatOf(pipeline.alignment.mean)) : null,
-    lda: pipeline.lda?.params ?? null, evaluation, primary: ranked[0][0],
+    lda: pipeline.lda?.params ?? null, evaluation, primary,
   };
   onProgress(1, "fertig");
   return model;
 }
 
-// Balanced mean top probability vs. balanced accuracy, and Brier score.
-function calibrationStats(probabilities, labels) {
-  const count = {};
-  labels.forEach((l, i) => probabilities[i] && (count[l] = (count[l] || 0) + 1));
+// Evaluate a whole animal using the intersection of its distinct-view sets.
+// This matches maximum-view calibration; duplicates are removed before scoring.
+function summarizeConformal(results, labels, groups, classifier = {}) {
+  const animals = new Map();
+  groups.forEach((g, i) => {
+    if (!animals.has(g)) animals.set(g, { label: labels[i], results: [] });
+    animals.get(g).results.push(results[i]);
+  });
+  const known = [...animals.values()].filter((a) => a.results.every(Boolean));
+  const valid = known.filter((a) => a.results.every((r) => r.openSetValid));
+  const sets = valid.map((a) => a.results[0].set.filter((t) => a.results.every((r) => r.set.includes(t))));
+  return { protocol: "split-specimen-max", metric: "euclidean", unit: "animal",
+    epsilon: classifier.epsilon ?? CLASSIFIER_DEFAULTS.epsilon,
+    knownQueries: known.length, validQueries: valid.length,
+    coverage: valid.length ? sets.filter((s, i) => s.includes(valid[i].label)).length / valid.length : null,
+    falseUnknownRate: valid.length ? sets.filter((s) => !s.length).length / valid.length : null,
+    meanSetSize: valid.length ? sets.reduce((n, s) => n + s.length, 0) / valid.length : null,
+    novelTaxon: {} };
+}
+
+// Class-balanced diagnostics, averaging distinct wings equally within each animal.
+function calibrationStats(probabilities, labels, groups) {
+  const animals = {}, views = {};
+  labels.forEach((l, i) => {
+    if (!probabilities[i]) return;
+    (animals[l] ??= new Set()).add(groups[i]);
+    views[groups[i]] = (views[groups[i]] ?? 0) + 1;
+  });
   let p = 0,
     hit = 0,
     brier = 0,
     n = 0;
   probabilities.forEach((prob, i) => {
     if (!prob) return;
-    const w = 1 / count[labels[i]],
+    const w = 1 / (animals[labels[i]].size * views[groups[i]]),
       [top, pt] = Object.entries(prob).sort((a, b) => b[1] - a[1])[0];
     p += w * pt;
     hit += w * (top === labels[i]);
@@ -306,11 +343,13 @@ function calibrationStats(probabilities, labels) {
 // Rebuild a runtime classifier from a (deserialised) model.
 export function loadModel(model) {
   if (model?.version !== MODEL_VERSION) throw Error("Modell-Version nicht unterstützt. Referenzen mit der aktuellen Version neu trainieren (" + MODEL_VERSION + ").");
+  if (model.animalPolicy !== ANIMAL_POLICY || !Array.isArray(model.groups) || new Set(model.groups).size !== model.groups.length ||
+      !["lda", "distance", "rwr", "knn"].includes(model.primary) || (model.primary === "lda" && !model.lda)) throw Error("Ungültiger Exemplar- oder Verfahrensvertrag im Modell.");
   const c = model.classifier, cal = model.calibration;
   if (!c || !(c.alpha >= 0 && c.alpha <= 1) || !(c.epsilon > 0 && c.epsilon < 1) ||
       !["k", "steps", "voteK", "conformalM"].every((k) => Number.isInteger(c[k]) && c[k] > 0) ||
       !(Number.isFinite(c.power) && c.power > 0) || typeof c.balanced !== "boolean") throw Error("Ungültige Klassifikator-Einstellungen im Modell.");
-  if (!cal || cal.protocol !== "split-specimen-max" || !Array.isArray(cal.scores) ||
+  if (!cal || cal.protocol !== "split-specimen-max" || cal.metric !== "euclidean" || !Array.isArray(cal.scores) ||
       cal.labels?.length !== cal.scores.length || cal.groups?.length !== cal.scores.length ||
       new Set(cal.groups).size !== cal.groups.length || cal.groups.some((g) => model.groups.includes(g)) ||
       !cal.scores.every(Number.isFinite) || !cal.labels.every((l) => model.labels.includes(l))) throw Error("Ungültige oder überlappende Kalibrierungsdaten im Modell.");
@@ -333,7 +372,7 @@ export function loadModel(model) {
     embed = makeEmbedder(model.reservoir.mode, dim, model.reservoir.params),
     n = model.labels.length,
     vectors = Array.from({ length: n }, (_, i) => model.vectors.subarray(i * dim, (i + 1) * dim)),
-    ctx = similarityContext(vectors.map(embed)),
+    ctx = similarityContext(vectors.map(embed)), distanceCtx = similarityContext(vectors, "euclidean"),
     calibration = model.calibration,
     mean = model.landmarkMean ? configOf(Array.from(model.landmarkMean)) : null,
     lda = model.lda ? shapeLDAFromParams(model.lda) : null;
@@ -351,22 +390,118 @@ export function loadModel(model) {
     classify(features, preprocessingVersion = model.preprocessingVersion) {
       if (features?.version !== model.featureVersion) throw Error("Merkmalsversion passt nicht zum Modell.");
       if (preprocessingVersion !== model.preprocessingVersion) throw Error("Vorverarbeitungsversion passt nicht zum Modell.");
+      resolveBlocks([features], model.blocks);
       const missing = this.missingBlocks(features);
       if (missing.length) throw Error(`Das Modell braucht Merkmale, die dieser Aufnahme fehlen: ${missing.join(", ")}.`);
-      resolveBlocks([features], model.blocks);
       const landmarks = alignedLandmarks(features),
         prepared = landmarks ? { ...features, blocks: { ...features.blocks, landmarks } } : features,
-        q = embed(standardizer.transform(prepared)),
-        qs = querySimilarities(ctx, q);
+        vector = standardizer.transform(prepared), q = embed(vector),
+        qs = querySimilarities(ctx, q), distances = querySimilarities(distanceCtx, vector);
       return {
         qs,
         embedding: q,
         scores: rwrScores(ctx, model.labels, qs, undefined, model.classifier),
         knn: knnScores(ctx, model.labels, qs, undefined, model.classifier),
-        conformal: conformalPredict(qs, model.labels, calibration, undefined, { ...model.classifier, referenceGroups: model.groups }),
+        distance: distanceScores(distanceCtx, model.labels, distances, undefined, model.classifier),
+        conformal: conformalPredict(distances, model.labels, calibration, undefined, { ...model.classifier, referenceGroups: model.groups }),
         lda: lda && landmarks ? { probabilities: lda.predictProba(landmarks), model: lda } : null,
         best: Math.max(...qs),
       };
     },
   };
+}
+
+// Evaluate an already frozen model without refitting, method selection or
+// calibration. Unknown taxa remain outside the model's supported labels.
+export function evaluateExternal(model, records) {
+  if (!Array.isArray(records) || !records.length) throw Error("Externer Test braucht unabhängige Exemplare.");
+  if (records.some((r) => typeof r.species !== "string" || !r.species.trim())) throw Error("Jedes Testexemplar braucht sein unabhängig bestimmtes Taxon.");
+  const runtime = loadModel(model);
+  resolveBlocks(records.map((r) => r.features), model.blocks);
+  const refs = distinctViews(records, model.blocks);
+  if (!model.provenance?.length) throw Error("Externer Test braucht Referenzherkunft im Modell.");
+  const usedGroups = new Set(model.provenance.map((r) => r.group));
+  const usedIds = new Set(model.provenance.map((r) => r.id).filter(Boolean));
+  const usedFeatures = new Set(model.provenance.map((r) => r.featureKey));
+  const usedHashes = new Set(model.provenance.flatMap((r) => r.sourceHashes ?? []));
+  const testSourceAnimals = new Map();
+  // Check every original's provenance before removing identical views.
+  for (const r of records) {
+    const hashes = r.sourceHashes ?? Object.values(r.preprocessing?.images ?? {}).map((i) => i.sourceSha256).filter(Boolean);
+    if (usedGroups.has(r.group) || usedIds.has(r.id) || usedFeatures.has(viewKey(r, model.blocks)) || hashes.some((h) => usedHashes.has(h)))
+      throw Error(`Testexemplar ${r.group} überschneidet sich mit Training/Kalibrierung (Identität, Bild oder identische Merkmale).`);
+    for (const hash of hashes) {
+      if (testSourceAnimals.has(hash) && testSourceAnimals.get(hash) !== r.group) throw Error("Dasselbe Test-Quellbild wurde mehreren Exemplar-IDs zugeordnet.");
+      testSourceAnimals.set(hash, r.group);
+    }
+  }
+  const results = refs.map((r) => runtime.classify(r.features, r.preprocessingVersion ?? null));
+  const knownIndices = refs.map((r, i) => model.labels.includes(r.species) ? i : -1).filter((i) => i >= 0);
+  const knownLabels = knownIndices.map((i) => refs[i].species), knownGroups = knownIndices.map((i) => refs[i].group);
+  const primaryScores = (r) => model.primary === "lda" ? r.lda?.probabilities : model.primary === "distance" ? r.distance : model.primary === "knn" ? r.knn : r.scores;
+  const methods = Object.fromEntries(["distance", "rwr", "knn", ...(model.lda ? ["lda"] : [])].map((key) => [key, {
+    name: METHODS[key], ...summarizeAnimals(knownLabels, knownIndices.map((i) => argmax(key === "lda" ? results[i].lda?.probabilities ?? {} : key === "rwr" ? results[i].scores : results[i][key])), knownGroups),
+  }]));
+  const unknown = new Map();
+  refs.forEach((r, i) => {
+    if (model.labels.includes(r.species)) return;
+    if (!unknown.has(r.group)) unknown.set(r.group, { taxon: r.species, results: [] });
+    unknown.get(r.group).results.push(results[i].conformal);
+  });
+  const novelTaxon = {};
+  for (const a of unknown.values()) {
+    const t = (novelTaxon[a.taxon] ??= { animals: 0, validAnimals: 0, rejected: 0 });
+    t.animals++;
+    if (!a.results.every((r) => r.openSetValid)) continue;
+    t.validAnimals++;
+    if (!a.results[0].set.some((label) => a.results.every((r) => r.set.includes(label)))) t.rejected++;
+  }
+  for (const t of Object.values(novelTaxon)) t.detectionRate = t.validAnimals ? t.rejected / t.validAnimals : null;
+  const knownConformal = summarizeConformal(knownIndices.map((i) => results[i].conformal), knownLabels, knownGroups, model.classifier);
+  return { protocol: "frozen-external-test; no refitting or calibration", modelId: model.id, primary: model.primary,
+    ...(model.attribution ? { dataAttribution: model.attribution } : {}),
+    animalPolicy: model.animalPolicy, methods, knownConformal, novelTaxon,
+    calibration: calibrationStats(knownIndices.map((i) => results[i].lda?.probabilities ?? null), knownLabels, knownGroups),
+    reliability: reliabilityDiagnostics(knownIndices.map((i) => results[i].lda?.probabilities ?? null), knownLabels, knownGroups),
+    acquisition: { testSeries: [...new Set(records.map((r) => r.series).filter(Boolean))],
+      sharedSeries: [...new Set(records.map((r) => r.series).filter((s) => s && model.provenance.some((r) => r.series === s)))],
+      note: "IDs and exact-source checks cannot prove that this dataset was untouched during development. Verify acquisition independence and seal the test set before model development." },
+    predictions: refs.map((r, i) => ({ id: r.id, group: r.group, truth: r.species, candidate: argmax(primaryScores(results[i]) ?? {}),
+      predictionSet: results[i].conformal.set, calibrated: results[i].conformal.openSetValid, unknown: results[i].conformal.unknown })) };
+}
+
+// Average view posteriors within an animal; bins use the external sample's
+// observed prevalence. These differ from class-balanced loss diagnostics.
+export function reliabilityDiagnostics(probabilities, labels, groups) {
+  const animals = new Map();
+  probabilities.forEach((p, i) => {
+    if (!p) return;
+    if (!animals.has(groups[i])) animals.set(groups[i], { truth: labels[i], sum: {}, n: 0 });
+    const animal = animals.get(groups[i]);
+    if (animal.truth !== labels[i]) throw Error("Exemplar hat mehrere Taxa");
+    animal.n++;
+    for (const [label, value] of Object.entries(p)) animal.sum[label] = (animal.sum[label] ?? 0) + value;
+  });
+  if (!animals.size) return null;
+  const rows = [...animals.values()].map((a) => {
+    const p = Object.fromEntries(Object.entries(a.sum).map(([label, v]) => [label, v / a.n]));
+    const top = argmax(p), confidence = p[top];
+    return { truth: a.truth, confidence, correct: Number(top === a.truth),
+      brier: [...new Set([...Object.keys(p), a.truth])].reduce((s, t) => s + ((p[t] ?? 0) - Number(t === a.truth)) ** 2, 0) };
+  });
+  const bins = Array.from({ length: 10 }, (_, i) => {
+    const bin = rows.filter((r) => Math.min(9, Math.floor(10 * r.confidence)) === i);
+    return { lower: i / 10, upper: (i + 1) / 10, animals: bin.length,
+      confidence: bin.length ? bin.reduce((s, r) => s + r.confidence, 0) / bin.length : null,
+      accuracy: bin.length ? bin.reduce((s, r) => s + r.correct, 0) / bin.length : null };
+  });
+  const byTrueTaxon = Object.fromEntries([...new Set(labels)].map((t) => {
+    const subset = rows.filter((r) => r.truth === t);
+    return [t, { animals: subset.length, meanTopProbability: subset.reduce((s, r) => s + r.confidence, 0) / subset.length,
+      accuracy: subset.reduce((s, r) => s + r.correct, 0) / subset.length }];
+  }).filter(([, stats]) => stats.animals));
+  return { unit: "animal", viewAggregation: "mean-view-posteriors", weighting: "observed-test-prevalence",
+    animals: rows.length, bins, byTrueTaxon,
+    brier: rows.reduce((s, r) => s + r.brier, 0) / rows.length,
+    ece: bins.reduce((s, b) => s + b.animals / rows.length * Math.abs((b.confidence ?? 0) - (b.accuracy ?? 0)), 0) };
 }

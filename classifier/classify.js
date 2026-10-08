@@ -1,6 +1,6 @@
 // Similarity-graph classification, calibrated open-set decisions and grouped
 // leave-one-out evaluation. Pure functions; embeddings are arrays of equal length.
-import { cosine } from "./embedding.js";
+import { cosine, mulberry32 } from "./embedding.js";
 
 export const CLASSIFIER_DEFAULTS = Object.freeze({
   k: 7, // kNN graph out-degree
@@ -14,13 +14,14 @@ export const CLASSIFIER_DEFAULTS = Object.freeze({
 });
 
 // Pairwise similarities plus each row's neighbours sorted by similarity.
-export function similarityContext(embeddings) {
+export function similarityContext(embeddings, metric = "cosine") {
+  if (!["cosine", "euclidean"].includes(metric)) throw Error("Unbekannte Distanzmetrik");
   const n = embeddings.length,
     sims = new Float32Array(n * n);
   for (let i = 0; i < n; i++) {
-    sims[i * n + i] = 1;
+    sims[i * n + i] = metric === "cosine" ? 1 : 0;
     for (let j = i + 1; j < n; j++)
-      sims[i * n + j] = sims[j * n + i] = cosine(embeddings[i], embeddings[j]);
+      sims[i * n + j] = sims[j * n + i] = proximity(embeddings[i], embeddings[j], metric);
   }
   const order = Array.from({ length: n }, (_, i) => {
     const row = sims.subarray(i * n, (i + 1) * n);
@@ -30,10 +31,17 @@ export function similarityContext(embeddings) {
         .sort((a, b) => row[b] - row[a] || a - b),
     );
   });
-  return { n, sims, order, embeddings };
+  return { n, sims, order, embeddings, metric };
+}
+function proximity(a, b, metric) {
+  if (metric === "cosine") return cosine(a, b);
+  if (a.length !== b.length) throw Error("Merkmalsdimensionen passen nicht");
+  return -Math.sqrt(a.reduce((sum, v, i) => sum + (v - b[i]) ** 2, 0));
 }
 export function querySimilarities(ctx, query) {
-  return Float32Array.from(ctx.embeddings, (e) => cosine(e, query));
+  const values = Float32Array.from(ctx.embeddings, (e) => proximity(e, query, ctx.metric ?? "cosine"));
+  if (![...values].every(Number.isFinite)) throw Error("Ungültige Ähnlichkeits- oder Distanzwerte");
+  return values;
 }
 const noneExcluded = (n) => new Uint8Array(n);
 function sortedRefs(qs, excluded) {
@@ -112,6 +120,14 @@ export function knnScores(ctx, labels, qs, excluded = noneExcluded(ctx.n), opts 
     top = new Set(sortedRefs(qs, excluded).slice(0, voteK));
   return normalizeScores(labels, excluded, (i) => (top.has(i) ? Math.max(1e-6, qs[i]) : 0), balanced);
 }
+// Unnormalized standardized feature distances retain radial outlier information.
+// Model contexts contain exactly one prototype per independent training animal.
+export function distanceScores(ctx, labels, qs, excluded = noneExcluded(ctx.n), opts = {}) {
+  if (ctx.metric !== "euclidean") throw Error("Distanzverfahren braucht euklidische Merkmale");
+  const { voteK, balanced } = { ...CLASSIFIER_DEFAULTS, ...opts };
+  const top = new Set(sortedRefs(qs, excluded).slice(0, voteK));
+  return normalizeScores(labels, excluded, (i) => top.has(i) ? 1 / (1 - qs[i]) : 0, balanced);
+}
 export function argmax(scores) {
   let best = null,
     value = -Infinity;
@@ -174,7 +190,7 @@ export function splitCalibrate(ctx, labels, referenceGroups, embeddings, calibra
   const scores = embeddings.map((e, i) => labelNonconformity(
     querySimilarities(ctx, e), labels, calibrationLabels[i], noneExcluded(ctx.n), conformalM, referenceGroups,
   ));
-  return specimenCalibration(scores, calibrationLabels, calibrationGroups);
+  return { ...specimenCalibration(scores, calibrationLabels, calibrationGroups), metric: ctx.metric ?? "cosine" };
 }
 export function conformalPredict(qs, labels, calibration, excluded = noneExcluded(qs.length), opts = {}) {
   const { conformalM, epsilon } = { ...CLASSIFIER_DEFAULTS, ...opts },
@@ -250,6 +266,34 @@ export function summarize(labels, predictions) {
     recall,
     confusion,
   };
+}
+
+// Majority consensus over distinct views; each animal contributes one outcome.
+// Ties are deterministic. Intervals resample whole animals within each taxon.
+export function summarizeAnimals(labels, predictions, groups, { bootstrap = 400 } = {}) {
+  const animals = new Map();
+  groups.forEach((group, i) => {
+    if (!animals.has(group)) animals.set(group, { label: labels[i], votes: {}, complete: true });
+    const animal = animals.get(group);
+    if (animal.label !== labels[i]) throw Error(`Exemplar ${group} hat mehrere Taxa`);
+    if (predictions[i] == null) animal.complete = false;
+    else animal.votes[predictions[i]] = (animal.votes[predictions[i]] ?? 0) + 1;
+  });
+  const rows = [...animals.values()], truth = rows.map((r) => r.label);
+  const guesses = rows.map((r) => r.complete ? argmax(r.votes) : null);
+  const result = summarize(truth, guesses);
+  const byTaxon = {};
+  truth.forEach((t, i) => { if (guesses[i] != null) (byTaxon[t] ??= []).push(guesses[i] === t ? 1 : 0); });
+  const strata = Object.values(byTaxon), rnd = mulberry32(29), samples = [];
+  if (bootstrap > 0 && strata.length && strata.every((s) => s.length >= 2)) {
+    for (let b = 0; b < bootstrap; b++) samples.push(strata.reduce((sum, s) =>
+      sum + s.reduce((n) => n + s[Math.floor(rnd() * s.length)], 0) / s.length, 0) / strata.length);
+    samples.sort((a, b) => a - b);
+  }
+  return { ...result, unit: "animal", viewAggregation: "majority-distinct-views; lexical-tie-break",
+    wingLevel: summarize(labels, predictions),
+    balancedAccuracyInterval: samples.length ? { level: 0.95, lower: samples[Math.floor(samples.length * 0.025)],
+      upper: samples[Math.min(samples.length - 1, Math.floor(samples.length * 0.975))], method: "taxon-stratified-animal-bootstrap" } : null };
 }
 
 // Conformal behaviour under grouped leave-one-out (known taxa) and

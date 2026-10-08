@@ -36,15 +36,15 @@ for (const sp of ["cryptarum", "lucorum", "terrestris"]) {
 }
 const FILE = "cryptarum-M-BUM0435_SEG37A-R.dw.png";
 const refs = rows
-  .filter(([f]) => chosen.has(f.replace(/-[LR]\.dw\.png$/, "")) && f !== FILE)
+  .filter(([f]) => chosen.has(f.replace(/-[LR]\.dw\.png$/, "")) && f.replace(/-[LR]\.dw\.png$/, "") !== FILE.replace(/-[LR]\.dw\.png$/, ""))
   .map(([f, ...c]) => ({
     id: f,
     species: "Bombus " + f.split("-")[0],
     specimenId: f.replace(/-[LR]\.dw\.png$/, ""),
     sex: f.split("-")[1],
     series: seriesOf(f),
-    preprocessingVersion: "wing-normalizer-0.2",
-    features: { version: "wing-features-1", landmarkScheme: "bombus-19", blocks: { landmarks: c.map((v) => -Number(v)) } },
+    preprocessingVersion: "wing-normalizer-0.3",
+    features: { version: "wing-features-2", landmarkScheme: "bombus-19", blocks: { landmarks: c.map((v) => -Number(v)) } },
     created: "2026-09-28T00:00:00Z",
   }));
 const truth = rows.find(([f]) => f === FILE).slice(1).map(Number);

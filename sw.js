@@ -1,5 +1,5 @@
 // Bump this version whenever a cached application asset changes.
-const VERSION = 'v11';
+const VERSION = 'v14';
 const CACHE_PREFIX = `wingmate:${self.registration.scope}:`;
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const APP_FILES = [
@@ -13,7 +13,13 @@ const APP_FILES = [
   './imaging/orientation.js', './imaging/matrix.js', './imaging/registration.js',
   './imaging/storage.js', './imaging/rig.js', './imaging/rig-store.js', './imaging/camera.js', './imaging/landmark-ui.js',
   './classifier/landmarks.js', './classifier/model.js', './classifier/model-store.js',
-  './classifier/train-worker.js', './classifier/typed-json.js', './training.js', './shell.js',
+  './classifier/specimens.js',
+  './classifier/train-worker.js', './classifier/typed-json.js', './training.js', './shell.js', './attribution.js',
+  './models/bombus-starter/model.json', './models/bombus-starter/references.json',
+  './models/bombus-starter/source-landmarks.csv', './models/bombus-starter/source-record.json',
+  './models/bombus-starter/NOTICE.md', './models/bombus-starter/README.md', './models/bombus-starter/CITATION.cff',
+  './models/apis-source/references.json', './models/apis-source/README.md',
+  './models/apis-source/NOTICE.md', './models/apis-source/CITATION.cff',
 ];
 const APP_URLS = new Set(APP_FILES.map(file => new URL(file, self.registration.scope).href));
 

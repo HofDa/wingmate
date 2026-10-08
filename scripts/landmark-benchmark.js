@@ -49,11 +49,11 @@ for (const [mode, params, title] of [
   }
 }
 const summary = {
-  version: 2, kind: "classification-stage benchmark on real landmark coordinates; not an image-pipeline benchmark",
+  version: 3, kind: "animal-level classification-stage benchmark on real landmark coordinates; not an image-pipeline benchmark",
   source: "Molasy & Tofilski, Zenodo 19703357, landmarks-original.csv",
   wings: refs.length, specimens: new Set(refs.map((r) => r.group)).size,
   perTaxon: Object.fromEntries([...new Set(refs.map((r) => r.species))].map((t) => [t, refs.filter((r) => r.species === t).length])),
-  protocol: "5-fold stratified grouped CV; GPA, scaling, PCA/LDA and nested temperature calibration fitted within training groups; disjoint specimen calibration holdout; development comparison, no independent final test",
+  protocol: "5-fold stratified grouped CV; distinct-view animal prototypes; GPA, scaling, PCA/LDA and nested temperature fitted within training animals; distance-based split calibration; animal majority outcomes and stratified animal bootstrap intervals; development comparison, no independent final test",
   runtimeMs: Date.now() - started, results, evaluations,
 };
 if (outPath) {

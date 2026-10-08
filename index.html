@@ -246,10 +246,10 @@
         </div>
         <label>Modus
           <select id="reservoirMode">
+            <option value="none">Direkte Merkmale (Standard)</option>
             <option value="fly">FlyHash · Mushroom Body (Dasgupta et al. 2017)</option>
             <option value="dense">Dichte Zufallsprojektion (LSH-Kontrolle)</option>
             <option value="graph">Importierter FlyWire-Graph (explorativ)</option>
-            <option value="none">Kein Reservoir (Kontrolle)</option>
           </select>
         </label>
         <div class="cols3">
@@ -293,9 +293,9 @@
         <dl class="method-list">
           <dt>Form &amp; WIP</dt><dd>Umrissprofil der Maske; CIELAB je Zelle (8 × 4) und chroma-gewichtetes Farbtonhistogramm, nur Membranpixel.</dd>
           <dt>Venation</dt><dd>Gradientenorientierung und relative Dunkelheit je Zelle, beleuchtungsnormiert, ohne Konturrand.</dd>
-          <dt>Landmarken</dt><dd>19 Landmarken, Procrustes-Ausrichtung, Hauptkomponenten und LDA mit kalibrierten Wahrscheinlichkeiten.</dd>
+          <dt>Landmarken</dt><dd>Standardverfahren bei passendem Schema: 19 Landmarken, Procrustes-Ausrichtung, Hauptkomponenten und LDA. Die Konfidenzen werden anhand getrennter Trainingsgruppen angepasst.</dd>
           <dt>Fly-Reservoir</dt><dd>FlyHash (zentrieren, dünne binäre Expansion, Winner-take-all); dichte Projektion und „kein Reservoir“ als Kontrollen.</dd>
-          <dt>Bestimmung</dt><dd>kNN-Graph mit Random Walk with Restart; unbekannte Arten über label-bedingte konforme Vorhersage.</dd>
+          <dt>Bestimmung</dt><dd>Ohne Landmarken: Distanz-kNN auf standardisierten Merkmalen. Ein Prototyp pro Tier; der Graph ist ein Vergleichsverfahren. Vorhersage-Sets nutzen getrennte Kalibrierungstiere und Merkmalsdistanzen. Die Erkennung unbekannter Arten braucht eigene Tests.</dd>
         </dl>
         <p class="warning">Methoden-Prototyp. Entwicklungswerte und Landmark-Benchmarks belegen keine Genauigkeit der vollständigen Bildverarbeitung an neuen Tieren. Dafür sind unabhängige Tests mit echten Flügelaufnahmen nötig.</p>
       </details>

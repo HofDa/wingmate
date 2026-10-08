@@ -1,0 +1,146 @@
+{
+  "created": "2026-04-23T05:32:34.649418+00:00",
+  "modified": "2026-04-23T05:32:35.043142+00:00",
+  "id": 19703357,
+  "conceptrecid": "19703356",
+  "doi": "10.5281/zenodo.19703357",
+  "conceptdoi": "10.5281/zenodo.19703356",
+  "doi_url": "https://doi.org/10.5281/zenodo.19703357",
+  "metadata": {
+    "title": "Fore wing images of Bombus cryptarum, B. lucorum, and B. terrestris",
+    "doi": "10.5281/zenodo.19703357",
+    "publication_date": "2026-04-23",
+    "description": "<p>The dataset consists of 814 fore wing images of three species of <em>Bombus</em>: <em>B. cryptarum</em>, <em>B. lucorum</em>, and <em>B. terrestris</em>. The wing images represent 423 specimens. The wing images are compressed in Bombus_cry_luc_ter-wing-images.zip. Raw coordinates of 19 landmarks marked on the wings are in file Bombus_cry_luc_ter-raw-coordinates.csv. Position of the landmarks describes Bombus-landmarks.png.</p>",
+    "access_right": "open",
+    "creators": [
+      {
+        "name": "Molasy, Bartłomiej",
+        "affiliation": "Jagiellonian University",
+        "orcid": "0000-0003-4079-9307"
+      },
+      {
+        "name": "Tofilski, Adam",
+        "affiliation": "University of Agriculture in Krakow",
+        "orcid": "0000-0002-3898-7029"
+      }
+    ],
+    "resource_type": {
+      "title": "Dataset",
+      "type": "dataset"
+    },
+    "license": {
+      "id": "odc-odbl"
+    },
+    "communities": [
+      {
+        "id": "wings"
+      }
+    ],
+    "relations": {
+      "version": [
+        {
+          "index": 0,
+          "is_last": true,
+          "parent": {
+            "pid_type": "recid",
+            "pid_value": "19703356"
+          }
+        }
+      ]
+    }
+  },
+  "title": "Fore wing images of Bombus cryptarum, B. lucorum, and B. terrestris",
+  "links": {
+    "self": "https://zenodo.org/api/records/19703357",
+    "self_html": "https://zenodo.org/records/19703357",
+    "preview_html": "https://zenodo.org/records/19703357?preview=1",
+    "doi": "https://doi.org/10.5281/zenodo.19703357",
+    "self_doi": "https://doi.org/10.5281/zenodo.19703357",
+    "self_doi_html": "https://zenodo.org/doi/10.5281/zenodo.19703357",
+    "reserve_doi": "https://zenodo.org/api/records/19703357/draft/pids/doi",
+    "parent": "https://zenodo.org/api/records/19703356",
+    "parent_html": "https://zenodo.org/records/19703356",
+    "parent_doi": "https://doi.org/10.5281/zenodo.19703356",
+    "parent_doi_html": "https://zenodo.org/doi/10.5281/zenodo.19703356",
+    "self_iiif_manifest": "https://zenodo.org/api/iiif/record:19703357/manifest",
+    "self_iiif_sequence": "https://zenodo.org/api/iiif/record:19703357/sequence/default",
+    "files": "https://zenodo.org/api/records/19703357/files",
+    "media_files": "https://zenodo.org/api/records/19703357/media-files",
+    "thumbnails": {
+      "10": "https://zenodo.org/api/iiif/record:19703357:Bombus-landmarks.png/full/%5E10,/0/default.jpg",
+      "50": "https://zenodo.org/api/iiif/record:19703357:Bombus-landmarks.png/full/%5E50,/0/default.jpg",
+      "100": "https://zenodo.org/api/iiif/record:19703357:Bombus-landmarks.png/full/%5E100,/0/default.jpg",
+      "250": "https://zenodo.org/api/iiif/record:19703357:Bombus-landmarks.png/full/%5E250,/0/default.jpg",
+      "750": "https://zenodo.org/api/iiif/record:19703357:Bombus-landmarks.png/full/%5E750,/0/default.jpg",
+      "1200": "https://zenodo.org/api/iiif/record:19703357:Bombus-landmarks.png/full/%5E1200,/0/default.jpg"
+    },
+    "archive": "https://zenodo.org/api/records/19703357/files-archive",
+    "archive_media": "https://zenodo.org/api/records/19703357/media-files-archive",
+    "latest": "https://zenodo.org/api/records/19703357/versions/latest",
+    "latest_html": "https://zenodo.org/records/19703357/latest",
+    "versions": "https://zenodo.org/api/records/19703357/versions",
+    "draft": "https://zenodo.org/api/records/19703357/draft",
+    "access_links": "https://zenodo.org/api/records/19703357/access/links",
+    "access_grants": "https://zenodo.org/api/records/19703357/access/grants",
+    "access_users": "https://zenodo.org/api/records/19703357/access/users",
+    "access_request": "https://zenodo.org/api/records/19703357/access/request",
+    "access": "https://zenodo.org/api/records/19703357/access",
+    "communities": "https://zenodo.org/api/records/19703357/communities",
+    "communities-suggestions": "https://zenodo.org/api/records/19703357/communities-suggestions",
+    "request_deletion": "https://zenodo.org/api/records/19703357/request-deletion",
+    "file_modification": "https://zenodo.org/api/records/19703357/file-modification",
+    "quota_increase": "https://zenodo.org/api/records/19703357/quota-increase",
+    "requests": "https://zenodo.org/api/records/19703357/requests"
+  },
+  "updated": "2026-04-23T05:32:35.043142+00:00",
+  "recid": "19703357",
+  "revision": 4,
+  "files": [
+    {
+      "id": "6e40dc59-4260-4668-a48b-fe85ba7ae6b3",
+      "key": "Bombus_cry_luc_ter-wing-images.zip",
+      "size": 2689553628,
+      "checksum": "md5:fa526fe6d787820b2feff67640a4fa67",
+      "links": {
+        "self": "https://zenodo.org/api/records/19703357/files/Bombus_cry_luc_ter-wing-images.zip/content"
+      }
+    },
+    {
+      "id": "4d10ad79-7b73-49e8-a4c1-e6b3e2bf6b9a",
+      "key": "Bombus_cry_luc_ter-raw-coordinates.csv",
+      "size": 241839,
+      "checksum": "md5:fd12bd4cfe2aa0e989472039497dfa34",
+      "links": {
+        "self": "https://zenodo.org/api/records/19703357/files/Bombus_cry_luc_ter-raw-coordinates.csv/content"
+      }
+    },
+    {
+      "id": "30fcf72c-4640-4bcf-a9ec-929c6c2b6119",
+      "key": "Bombus-landmarks.png",
+      "size": 71409,
+      "checksum": "md5:2417ef9968733670008d6daa9e913122",
+      "links": {
+        "self": "https://zenodo.org/api/records/19703357/files/Bombus-landmarks.png/content"
+      }
+    }
+  ],
+  "swh": {},
+  "owners": [
+    {
+      "id": "379705"
+    }
+  ],
+  "status": "published",
+  "stats": {
+    "downloads": 47,
+    "unique_downloads": 44,
+    "views": 94,
+    "unique_views": 84,
+    "version_downloads": 47,
+    "version_unique_downloads": 44,
+    "version_unique_views": 84,
+    "version_views": 94
+  },
+  "state": "done",
+  "submitted": true
+}

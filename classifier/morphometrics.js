@@ -13,7 +13,8 @@ export function centreAndScale(config) {
   }
   let size = 0;
   for (const [x, y] of config) size += (x - cx) ** 2 + (y - cy) ** 2;
-  size = Math.sqrt(size) || 1;
+  size = Math.sqrt(size);
+  if (!(size > 0) || !Number.isFinite(size)) throw Error("Landmarken haben keine messbare Formvariation oder ungültige Koordinaten.");
   return { shape: config.map(([x, y]) => [(x - cx) / size, (y - cy) / size]), centroidSize: size };
 }
 // Optimal rotation (no reflection) of `shape` onto `target`; both centred.
@@ -147,9 +148,11 @@ export function fitLDA(X, labels, { shrinkage = "auto" } = {}) {
     for (let b = 0; b <= a; b++) cov[b * d + a] = cov[a * d + b] /= dof;
     trace += cov[a * d + a];
   }
+  if (!(trace > 0) || !Number.isFinite(trace)) throw Error("Keine messbare Variation innerhalb der Taxa – LDA braucht weitere unabhängige Exemplare.");
+  const varianceFloor = (trace / d) * 1e-8;
   for (let a = 0; a < d; a++)
     for (let b = 0; b < d; b++)
-      cov[a * d + b] = (1 - shrinkage) * cov[a * d + b] + (a === b ? (shrinkage * trace) / d : 0);
+      cov[a * d + b] = (1 - shrinkage) * cov[a * d + b] + (a === b ? (shrinkage * trace) / d + varianceFloor : 0);
   const l = cholesky(cov, d),
     model = taxa.map((t) => {
       const w = solve(l, d, means[t]);

@@ -14,6 +14,13 @@ ODbL notices when redistributing this subset; the extracted database remains
 available under ODbL. This is the publisher's record-level license, not a claim
 that these images are public domain. No original pixel files were modified.
 
+The separately packaged [numeric Bombus starter](../models/bombus-starter/NOTICE.md)
+uses this source's landmark coordinates only. Its unchanged source CSV, adapted
+reference database and fitted numeric model database are distributed under ODbL
+1.0 with source checksums, embedded attribution and a reproducible alteration
+recipe. No original photographs are added to that starter package. ODbL's
+database terms do not establish individual-image copyright permission.
+
 ## Spiesman et al. publication panels (18 derived crops)
 
 Spiesman BJ, Gratton C, Gratton E, Hines H (2024). *Deep learning for identifying
@@ -29,3 +36,11 @@ No color correction or resizing. Exact crop rectangles, source URLs, attribution
 and SHA-256 checksums are in `metadata.json`. Panel labels remain present.
 The separately linked GitHub image repository has no explicit license and its
 standalone images were **not** copied.
+
+## Apis mellifera numeric source
+
+Pinned Zenodo record [18845767](https://doi.org/10.5281/zenodo.18845767),
+Machlowska et al. (2026), v2: unchanged numeric CSVs and publisher metadata
+are in `models/apis-source/`. The source and adapted reference collection
+are provided under ODbL 1.0; [NOTICE](../models/apis-source/NOTICE.md) contains
+the full attribution and applicable terms. No source images are included.

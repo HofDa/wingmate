@@ -285,8 +285,8 @@ Nach dem Freigeben geänderte Landmarken heben die Freigabe auf – dann erneut 
 
 ![Ergebnis mit Empfehlung, Ähnlichkeitsgraph und Procrustes + LDA](img/09-ergebnis.webp)
 
-**Die Zeile ganz oben** ist die Empfehlung. Mit aktivem Modell steht dort, welches Verfahren sich
-im Training am besten bewährt hat, seine Antwort und wie oft es im Training richtig lag, z. B.:
+**Die Zeile ganz oben** ist die Empfehlung. Mit aktivem Modell steht dort, welches Standardverfahren das Modell
+verwendet, seine Antwort und wie oft es im Training richtig lag, z. B.:
 *Procrustes + PCA + LDA → Bombus cryptarum (98 %); im Training 87,2 % balanciert richtig.*
 
 Darunter zwei Verfahren:
@@ -324,7 +324,16 @@ für Schritt** (Animation des Rechenwegs).
 
 ## 9. Modell trainieren
 
-Ohne Modell rechnet Wingmate jede Bestimmung **live** aus den aktuellen Referenzen. Mit
+Unter **Veröffentlichtes Startmodell (3 Bombus-Arten)** lässt sich ein optionales
+Modell für **B. cryptarum, B. lucorum und B. terrestris** laden. Es benötigt die
+19 manuellen Bombus-Landmarken und verändert keine eigenen Bildreferenzen.
+Quelle, Zitation, ODbL-1.0 und die numerischen Referenzdaten sind dort verlinkt;
+der Modellexport behält diese Angaben. Das Startmodell hat keinen unabhängigen
+Abschlusstest. Für cryptarum reichen die Kalibrierungstiere nicht zum verlässlichen
+Ausschluss unbekannter Arten. Für andere Arten ein eigenes Modell verwenden.
+
+Ohne Modell rechnet Wingmate jede Bestimmung **live** aus den aktuellen Referenzen, bevorzugt
+mit Landmarken-LDA und sonst Distanz-kNN. Jedes Referenztier steuert einen Prototyp bei. Mit
 **Referenzen → Modell trainieren** wird daraus ein festes **Modell** mit Entwicklungsbewertung:
 
 ![Training: Bereitschaft, Bericht und Verwechslungsmatrix](img/08-training.webp)
@@ -337,17 +346,24 @@ Serien:
 - Hinweise wie **nur ♀** oder **nur eine Serie/Fundort** bedeuten, dass das Modell andere
   Geschlechter bzw. neue Fundorte schlechter erkennen wird.
 
-**2. Trainieren.** Namen eingeben, **Trainieren**. Wingmate prüft alle Verfahren mit derselben
+Bei einer neu freigegebenen Aufnahme wird das Feld **Exemplar-ID** geleert. Für weitere
+Flügel desselben Tieres dieselbe stabile ID erneut eingeben; für ein neues Tier eine neue ID.
+
+**2. Trainieren.** Namen und **Eingabemodus** wählen, **Trainieren**. Alle Referenzen müssen
+die gewählten Merkmale haben. „Nur Landmarken“ erlaubt eine Formanalyse ohne die
+experimentelle WIP-Fusion. Wingmate prüft alle Verfahren mit derselben
 **Kreuzvalidierung**: Die Referenzen werden fünfmal aufgeteilt, jedes Mal wird ein Fünftel
-zurückgehalten und bestimmt. Alle Flügel eines Tieres bleiben dabei zusammen. Das beste Verfahren
-wird gewählt (★) und das Ergebnis eingefroren. Ausrichtung, Skalierung und PCA/LDA werden
+zurückgehalten und bestimmt. Alle Flügel eines Tieres bleiben dabei zusammen. Das Standardverfahren ist Landmarken-LDA, bei fehlenden Landmarken Distanz-kNN (★).
+Die anderen Verfahren dienen dem Vergleich. Das Ergebnis wird eingefroren. Ausrichtung, Skalierung und PCA/LDA werden
 in jedem Trainingsfold neu angepasst. Separate Tiere dienen ausschließlich der Kalibrierung
-(standardmäßig 20 % je Art). Die angezeigten Auswahlwerte ersetzen keinen unabhängigen
+(standardmäßig 20 % je Art). Die angezeigten Entwicklungswerte ersetzen keinen unabhängigen
 Abschlusstest. Zehn Referenztiere bedeuten deshalb noch keine ausreichende Kalibrierung.
 
 **3. Den Bericht lesen:**
 
-- **Kreuzvalidierung:** Anteil richtig bestimmter zurückgehaltener Exemplare. *Balanciert* heißt:
+- **Kreuzvalidierung:** Jedes Tier zählt einmal; seine unterschiedlichen Flügel entscheiden
+  per Mehrheit (Gleichstand nach Taxonname). Flügelwerte bleiben getrennt im Modellexport.
+  Die 95-%-Intervalle resampeln die gespeicherten Tierergebnisse, keine vollständigen neuen Modelle. *Balanciert* heißt:
   jede Art zählt gleich viel, auch wenn eine Art viel mehr Referenzen hat.
 - **Transfer auf ungesehene Serien** (nur wenn alle Referenzen eine Serie haben): Jeweils eine
   ganze Serie wird zurückgehalten. **Liegt dieser Wert deutlich unter der Kreuzvalidierung** (im Bild
@@ -364,7 +380,8 @@ Abschlusstest. Zehn Referenztiere bedeuten deshalb noch keine ausreichende Kalib
 Live-Bestimmung), unter **Modelle verwalten** **Exportieren** (eine JSON-Datei, z. B. zum Weitergeben),
 **Importieren** oder **Löschen** wählen.
 
-Ein Modell ändert sich nicht von selbst. Kommen neue Referenzen dazu, erscheint
+Modelle aus früheren Versionen benötigen neues Training (`wingmate-model-3`). Aktuelle
+Bildreferenzen bleiben verwendbar. Ein Modell ändert sich nicht von selbst. Kommen neue Referenzen dazu, erscheint
 *„Referenzen haben sich seit dem Training geändert“* → neu trainieren.
 
 ---
@@ -412,8 +429,8 @@ IdentiFly weiterverwenden.
 
 - **Aufnahme-Rig:** siehe Kapitel 3.
 - **Rechenraum (Reservoir):** wie der Ähnlichkeitsgraph die Merkmale vergleicht. Standard ist
-  *FlyHash* (nach dem Riechsystem der Fruchtfliege); *Kein Reservoir* und *Dichte Zufallsprojektion*
-  sind Vergleichsverfahren. **Für normale Nutzung nichts ändern.** Änderungen gelten für die
+  *Direkte Merkmale*. *FlyHash* (nach dem Riechsystem der Fruchtfliege) und
+  *Dichte Zufallsprojektion* sind experimentelle Vergleichsverfahren. **Für normale Nutzung nichts ändern.** Änderungen gelten für die
   Live-Bestimmung und neues Training, nicht für ein bereits trainiertes Modell.
 - **FlyWire-Subgraph importieren:** experimentell, für Forschungsfragen zum echten
   Fliegen-Konnektom; wird nicht in Modelle eingefroren.
@@ -474,3 +491,17 @@ IdentiFly weiterverwenden.
 
 *Screenshots: echte App mit echten Flügeldaten (Molasy & Tofilski, Zenodo 19703357), erzeugt mit
 `scripts/manual-screenshots.cjs`.*
+
+## Apis mellifera: Referenzsammlung
+
+Im Trainingsbereich lässt sich die veröffentlichte Apis-Referenzsammlung
+herunterladen, auch offline nach der ersten vollständigen App-Installation.
+Sie enthält je einen Flügel aus 1.342 Kolonien in zehn Ländern sowie Zitation
+und ODbL-1.0-Angaben. Die unveränderten numerischen Originaldateien liegen
+im Repository unter `models/apis-source/originals/`.
+
+Die Sammlung nutzt das separate Landmarkenschema nach Nawrocka (2018) und
+ist kein importierbares Artenmodell oder persönlicher Referenzexport. Für
+ein gemeinsames Apis/Bombus-Modell muss die anatomische Zuordnung zuerst
+geprüft werden. Einzelheiten, Datenformat und Quellen stehen im
+[Datensatz-README](../models/apis-source/README.md).

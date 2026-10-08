@@ -64,15 +64,16 @@ test("stratified grouped folds keep specimens together and spread taxa", () => {
   }
   assert.throws(() => stratifiedGroupFolds(["A", "B"], ["s1", "s1"]), /mehrere Taxa/);
 });
-test("training evaluates all methods with the same folds and picks the best", () => {
+test("training evaluates the same animal folds and defaults to landmark LDA", () => {
   assert.equal(model.version, MODEL_VERSION);
-  assert.deepEqual(Object.keys(model.evaluation.methods).sort(), ["knn", "lda", "rwr"]);
+  assert.deepEqual(Object.keys(model.evaluation.methods).sort(), ["distance", "knn", "lda", "rwr"]);
   for (const m of Object.values(model.evaluation.methods)) {
     assert.ok(m.balancedAccuracy > 0.34 && m.balancedAccuracy <= 1, m.name);
-    assert.equal(m.evaluated, refs.length);
+    assert.equal(m.evaluated, new Set(refs.map((r) => r.group)).size);
+    assert.equal(m.wingLevel.evaluated, refs.length);
   }
-  const best = Math.max(...Object.values(model.evaluation.methods).map((m) => m.balancedAccuracy));
-  assert.equal(model.evaluation.methods[model.primary].balancedAccuracy, best);
+  assert.equal(model.primary, "lda");
+  assert.equal(model.primaryPolicy, "landmarks-first-distance-fallback");
   const cal = model.evaluation.ldaCalibration;
   assert.ok(Math.abs(cal.meanTopProbability - cal.balancedAccuracy) < 0.2, JSON.stringify(cal));
   // Twelve animals per taxon cannot provide nine independent calibration
@@ -149,7 +150,7 @@ test("unrepresentative references: CV looks perfect, other collections fail, rea
 test("leave-one-series-out reports transfer across collections", () => {
   const t = model.evaluation.seriesTransfer;
   assert.ok(t.series >= 2);
-  assert.deepEqual(Object.keys(t.methods).sort(), ["knn", "lda", "rwr"]);
+  assert.deepEqual(Object.keys(t.methods).sort(), ["distance", "knn", "lda", "rwr"]);
   assert.ok(t.methods.lda.evaluated > 0);
 });
 test("reference fingerprint and readiness", () => {
@@ -204,4 +205,110 @@ test("missing diagnostic modalities require an explicit input contract", () => {
   const partial = refs.map((r, i) => ({ ...r, features: { ...r.features, blocks: { ...r.features.blocks, ...(i ? { wip: [i, 2] } : {}) } } }));
   assert.throws(() => trainModel(partial, settings), /Eingabemodus/);
   assert.throws(() => trainModel(partial, { ...settings, blocks: ["wip"] }), /wip/);
+});
+
+// Mechanistic fixtures isolate angular outliers and repeated-animal influence.
+const rayReferences = () => Array.from({ length: 90 }, (_, i) => ({
+  id: `ray-${i}`, group: `animal-${i}`, species: i < 45 ? "A" : "B",
+  features: { version: "ray-v1", blocks: { shape: [i < 45 ? -2 - i / 100 : 2 + i / 100, 0, 0, 0, 0, 0, 0, 0] } },
+}));
+const rayQuery = (v) => ({ version: "ray-v1", blocks: { shape: [v, 0, 0, 0, 0, 0, 0, 0] } });
+
+test("distance calibration rejects extreme radial outliers in every embedding mode", () => {
+  for (const mode of ["none", "fly", "dense"]) {
+    const m = trainModel(rayReferences(), { mode, params: { kenyonCells: 128 } });
+    assert.equal(m.primary, "distance");
+    assert.equal(m.calibration.metric, "euclidean");
+    const runtime = loadModel(m), inside = runtime.classify(rayQuery(2.655)), outside = runtime.classify(rayQuery(2000));
+    assert.ok(inside.conformal.set.includes("B"));
+    assert.equal(inside.conformal.openSetValid, true);
+    assert.equal(outside.conformal.unknown, true, mode);
+    assert.deepEqual(outside.conformal.set, []);
+    assert.deepEqual(outside, loadModel(parseTyped(stringifyTyped(m))).classify(rayQuery(2000)));
+    assert.throws(() => runtime.classify(rayQuery(1e100)), /ungültige Werte/);
+  }
+});
+
+test("repeated views cannot change fitting, graph topology, neighbor vote or animal metrics", () => {
+  const refs = rayReferences();
+  const a = trainModel(refs), b = trainModel([...refs, ...Array.from({ length: 12 }, (_, i) => ({ ...refs[50], id: `repeat-${i}` }))]);
+  assert.equal(new Set(b.groups).size, b.groups.length);
+  assert.deepEqual(a.standardizer, b.standardizer);
+  assert.deepEqual(a.vectors, b.vectors);
+  assert.deepEqual(a.calibration, b.calibration);
+  assert.deepEqual(a.evaluation, b.evaluation);
+  assert.deepEqual(loadModel(a).classify(rayQuery(2.655)), loadModel(b).classify(rayQuery(2.655)));
+  assert.equal(a.references.trainingCount, 72);
+  assert.equal(a.evaluation.methods.distance.evaluated, 90);
+  assert.ok(a.evaluation.methods.distance.balancedAccuracyInterval);
+});
+
+test("landmark fitting uses one animal prototype regardless of repeated views", () => {
+  const repeated = trainModel([...refs, ...Array(6).fill(refs[0])], settings);
+  assert.deepEqual(model.standardizer, repeated.standardizer);
+  assert.deepEqual(model.landmarkMean, repeated.landmarkMean);
+  assert.deepEqual(model.lda, repeated.lda);
+  assert.deepEqual(model.evaluation, repeated.evaluation);
+});
+
+test("old angular-calibration model artifacts require retraining", () => {
+  assert.throws(() => loadModel({ ...model, version: "wingmate-model-2" }), /neu trainieren/);
+  assert.throws(() => loadModel({ ...model, calibration: { ...model.calibration, metric: "cosine" } }), /Kalibrierungsdaten/);
+});
+
+test("external evaluation rejects training/calibration reuse and separates unseen taxa", async () => {
+  const { evaluateExternal } = await import("../classifier/model.js");
+  const refs = rayReferences(), model = trainModel(refs);
+  assert.throws(() => evaluateExternal(model, [refs[0]]), /überschneidet/);
+  const cal = refs.find((r) => model.calibration.groups.includes(r.group));
+  assert.throws(() => evaluateExternal(model, [cal]), /überschneidet/);
+  assert.throws(() => evaluateExternal(model, [{ ...refs[0], id: "renamed", group: "renamed" }]), /identische Merkmale/);
+  const queries = [
+    { id: "new-A", group: "new-A", species: "A", features: rayQuery(-2.205) },
+    { id: "new-B", group: "new-B", species: "B", features: rayQuery(2.655) },
+    { id: "novel", group: "novel", species: "C", features: rayQuery(2000) },
+  ];
+  const snapshot = stringifyTyped(model), report = evaluateExternal(model, queries);
+  assert.throws(() => evaluateExternal(model, queries.slice(0, 2).map((r) => ({ ...r, sourceHashes: ["same-test-image"] }))), /Test-Quellbild/);
+  assert.throws(() => evaluateExternal(model, [{ ...queries[0], id: refs[0].id }, queries[0]]), /überschneidet/);
+  assert.throws(() => evaluateExternal(model, [{ ...queries[0], species: "" }]), /Taxon/);
+  assert.equal(report.methods.distance.evaluated, 2);
+  assert.equal(report.methods.distance.accuracy, 1);
+  assert.equal(report.novelTaxon.C.detectionRate, 1);
+  assert.equal(report.knownConformal.validQueries, 2);
+  assert.equal(stringifyTyped(model), snapshot, "external evaluation must not refit the artifact");
+});
+
+test("different views are averaged within each animal before fitting the scaler", async () => {
+  const { fitReferenceSpace } = await import("../classifier/model.js");
+  const record = (group, value) => ({ id: `${group}-${value}`, group, species: group,
+    features: { version: "view-test", blocks: { shape: [value] } } });
+  const fitted = fitReferenceSpace([record("A", 0), record("A", 2), record("B", 10)]);
+  assert.deepEqual(fitted.groups, ["A", "B"]);
+  assert.equal(fitted.standardizer.params.mean[0], 5.5);
+  assert.equal(fitted.animals[0].viewCount, 2);
+  const changedUnusedScheme = { ...record("A", 0), features: { ...record("A", 0).features, landmarkScheme: "unused" } };
+  const repeated = fitReferenceSpace([record("A", 0), record("A", 2), record("B", 10), changedUnusedScheme]);
+  assert.deepEqual(repeated.standardizer.params, fitted.standardizer.params);
+  assert.equal(repeated.animals[0].viewCount, 2);
+});
+
+test("known image reuse under new animal IDs and ambiguous acquisition-series tests are guarded", async () => {
+  const { evaluateReferences } = await import("../classifier/model.js");
+  const refs = rayReferences();
+  assert.throws(() => trainModel(refs.map((r, i) => ({ ...r, sourceHashes: i < 2 ? ["same-file"] : [] }))), /Quellbild/);
+  const multiSeries = [...refs.map((r) => ({ ...r, series: "one" })), { ...refs[0], id: "repeat-session", series: "two" }];
+  const report = evaluateReferences(multiSeries);
+  assert.equal(report.seriesTransfer, undefined);
+  assert.match(report.seriesTransferUnavailable, /genau eine Serie/);
+});
+
+test("external probability diagnostics report animal counts and per-taxon calibration", async () => {
+  const { reliabilityDiagnostics } = await import("../classifier/model.js");
+  const report = reliabilityDiagnostics([{ A: .9, B: .1 }, { A: .7, B: .3 }, { A: .4, B: .6 }], ["A", "A", "B"], ["one", "one", "two"]);
+  assert.equal(report.animals, 2);
+  assert.equal(report.byTrueTaxon.A.animals, 1);
+  assert.ok(Math.abs(report.ece - .3) < 1e-12);
+  assert.ok(Math.abs(report.brier - .2) < 1e-12);
+  assert.equal(report.bins.reduce((sum, b) => sum + b.animals, 0), 2);
 });

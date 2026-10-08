@@ -97,6 +97,8 @@ const query = "cryptarum-M-BUM0435_SEG37A-R.dw.png";
     }
     const summary = await page.textContent(".lm-details > summary"),
       warning = await page.textContent(".lm-editor .status");
+    const review = page.getByRole("textbox", { name: "Venation: Begründung der Freigabe" });
+    if (await review.count()) await review.fill("Published landmark fixture; coordinate-path software check, not independent image identification validation.");
     await page.click("#qcAccept");
     await page.waitForFunction(() => window.wingQC.items.venation?.accepted);
     const scale = await page.evaluate(() => window.wingQC.items.venation.result.metadata.scale);
@@ -153,6 +155,6 @@ const query = "cryptarum-M-BUM0435_SEG37A-R.dw.png";
       refined.every((r) => r.maxErrorPx < 1.5) &&
       hasBlock === 38 &&
       lda.includes("Procrustes + LDA") &&
-      validation[0]?.startsWith("Procrustes + LDA");
+      validation.some((row) => row.startsWith("Procrustes + PCA + LDA"));
   process.exit(ok ? 0 : 1);
 })();

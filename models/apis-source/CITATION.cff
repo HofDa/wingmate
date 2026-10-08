@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "Please cite the original dataset when using this collection."
+type: dataset
+title: "Fore wings of honey bees (Apis mellifera) from northwestern Europe"
+version: v2
+doi: 10.5281/zenodo.18845767
+date-released: 2026-03-03
+license: ODbL-1.0
+authors:
+  - family-names: "Machlowska"
+    given-names: "Julita"
+  - family-names: "Gerula"
+    given-names: "Dariusz"
+  - family-names: "Oleksa"
+    given-names: "Andrzej"
+  - family-names: "Kok"
+    given-names: "Henk"
+  - family-names: "McCormack"
+    given-names: "Grace"
+  - family-names: "Valentine"
+    given-names: "Alexandra"
+  - family-names: "Kirkerud"
+    given-names: "Lars"
+  - family-names: "Kryger"
+    given-names: "Per"
+  - family-names: "Blažytė-Čereškienė"
+    given-names: "Laima"
+  - family-names: "Hasselmann"
+    given-names: "Martin"
+  - family-names: "Hailu"
+    given-names: "Teweldemedhn G."
+  - family-names: "Rutschmann"
+    given-names: "Benjamin"
+  - family-names: "Tofilski"
+    given-names: "Adam"

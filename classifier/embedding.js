@@ -77,6 +77,7 @@ export function standardizerFromParams(params) {
         out = new Float32Array(dim);
       for (let i = 0; i < dim; i++)
         out[i] = weight[i] ? ((v[i] - mean[i]) / sd[i]) * weight[i] : 0;
+      if (![...out].every(Number.isFinite)) throw Error("Standardisierte Merkmale haben ungültige Werte oder überschreiten den Wertebereich.");
       return out;
     },
   };
@@ -127,6 +128,7 @@ export function flyProjection(inputDim, params = {}) {
     rnd = mulberry32(seed),
     idx = new Int32Array(kenyonCells * k),
     pool = Int32Array.from({ length: inputDim }, (_, i) => i);
+  if (k >= inputDim) throw Error("FlyHash braucht mehr Eingabedimensionen als Fan-in; direktes Verfahren verwenden oder Fan-in verringern.");
   for (let c = 0; c < kenyonCells; c++)
     for (let j = 0; j < k; j++) {
       const r = j + Math.floor(rnd() * (inputDim - j));
@@ -154,6 +156,7 @@ export function denseProjection(inputDim, params = {}) {
 export function project(projection, x, activeFraction = RESERVOIR_DEFAULTS.activeFraction) {
   if (x.length !== projection.inputDim)
     throw Error("Eingabedimension passt nicht zur Projektion");
+  if (x.every((v) => v === 0)) return new Float32Array(projection.kenyonCells);
   const n = projection.kenyonCells,
     act = new Float32Array(n);
   if (projection.kind === "fly") {

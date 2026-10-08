@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "Please cite the original dataset when using this Wingmate adaptation; see NOTICE.md for ODbL terms and modifications."
+title: "Fore wing images of Bombus cryptarum, B. lucorum, and B. terrestris"
+type: dataset
+authors:
+  - family-names: Molasy
+    given-names: Bartłomiej
+    orcid: "https://orcid.org/0000-0003-4079-9307"
+  - family-names: Tofilski
+    given-names: Adam
+    orcid: "https://orcid.org/0000-0002-3898-7029"
+doi: "10.5281/zenodo.19703357"
+date-released: "2026-04-23"
+license: ODbL-1.0
+url: "https://zenodo.org/records/19703357"

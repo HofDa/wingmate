@@ -1,11 +1,15 @@
 import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
+import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 
 const root = new URL('../', import.meta.url);
-const output = new URL('_site/', root);
+const outIndex = process.argv.indexOf('--out');
+if (outIndex >= 0 && !process.argv[outIndex + 1]) throw Error('--out requires an empty output directory.');
+const output = outIndex < 0 ? new URL('_site/', root) : pathToFileURL(resolve(process.argv[outIndex + 1]) + '/');
 const assets = ['index.html', 'styles.css', 'app.js', 'walk.js', 'pwa.js', 'shell.js', 'training.js',
-  'sw.js', 'manifest.webmanifest', 'icons', 'classifier', 'imaging'];
+  'sw.js', 'manifest.webmanifest', 'icons', 'classifier', 'imaging', 'attribution.js', 'models'];
 
 // Refuse to reuse a nonempty output directory, preventing stale files from shipping.
 await mkdir(output, { recursive: true });
@@ -34,4 +38,4 @@ for (const file of cachedFiles) {
 if (!/const VERSION = '[^']+';/.test(sw)) throw Error('Cannot locate the service worker cache version.');
 await writeFile(swFile, sw.replace(/const VERSION = '[^']+';/, `const VERSION = '${version}';`));
 await writeFile(new URL('.nojekyll', output), '');
-console.log(`GitHub Pages artifact: _site (${version})`);
+console.log(`GitHub Pages artifact: ${output.pathname} (${version})`);

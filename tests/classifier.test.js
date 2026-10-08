@@ -335,3 +335,14 @@ test("no-vein silhouette is reviewed and has no boundary-derived vein features",
   assert.ok(processed.metadata.captureQuality.sharpnessInWing > 0);
   assert.ok(Math.hypot(...extractFeatures({ venation: processed.normalized }).blocks.venation) > 0);
 });
+
+test("low-dimensional FlyHash is rejected and zero inputs create no active hash bits", () => {
+  assert.throws(() => makeEmbedder("fly", 2), /Fan-in/);
+  assert.deepEqual([...makeEmbedder("fly", 8, { kenyonCells: 128 })(new Float32Array(8))], Array(128).fill(0));
+});
+
+test("degenerate LDA reports insufficient variation and rank-deficient data remain finite", () => {
+  assert.throws(() => fitLDA([[1, 1], [1, 1], [1, 1], [1, 1]], ["A", "A", "B", "B"]), /Variation/);
+  const model = fitLDA([[0, 0], [.1, .1], [1, 1], [1.1, 1.1]], ["A", "A", "B", "B"], { shrinkage: 0 });
+  assert.ok(Object.values(model.predictProba([.05, .05])).every(Number.isFinite));
+});

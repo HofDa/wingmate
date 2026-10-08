@@ -15,6 +15,7 @@ import {
   rwrScores,
   rwrTransitions,
   knnScores,
+  distanceScores,
   argmax,
   entropyBits,
   calibrate,
@@ -22,6 +23,7 @@ import {
   CLASSIFIER_DEFAULTS,
 } from "./classifier/classify.js";
 import { pca2, fitCalibratedShapeLDA } from "./classifier/morphometrics.js";
+import { attributionNotice } from "./attribution.js";
 import { landmarkBlock } from "./classifier/landmarks.js";
 import { createWalkView, traceWalk } from "./walk.js";
 import { createTrainingView } from "./training.js";
@@ -38,6 +40,7 @@ const state = {
   query: null, // { features, preprocessing, specimenArchiveId }
   model: null, // active frozen model runtime (training mode) or null = live
 };
+let lastAcceptedArchive = null;
 
 function message(target, text, kind = "info") {
   const el = $(target);
@@ -227,20 +230,22 @@ function classifyWithModel() {
     const box = ldaBox();
     if (r.lda) renderLDAProbabilities(box, r.lda.probabilities, r.lda.model, Math.min(...Object.values(m.taxa).map((t) => t.specimens)));
     else if (m.lda) box.append(note("mini", "Procrustes + LDA: Für dieses Exemplar fehlen vollständige Landmarken desselben Schemas."));
+    if (m.attribution) box.append(attributionNotice(m.attribution));
+    if (m.starter) box.append(note("warning", "Startmodell für drei Bombus-Arten. Ein hoher LDA-Wert bestätigt nicht die Zugehörigkeit zu diesen Arten; unbekannte Arten sind unzureichend kalibriert."));
     drawEmbedding({ embeddings: runtime.ctx.embeddings, labels: runtime.labels }, r.embedding);
     const primary = m.evaluation.methods[m.primary],
-      pick = m.primary === "lda" ? r.lda?.probabilities : m.primary === "knn" ? r.knn : r.scores,
+      pick = m.primary === "lda" ? r.lda?.probabilities : m.primary === "distance" ? r.distance : m.primary === "knn" ? r.knn : r.scores,
       top = pick ? Object.entries(pick).sort((a, b) => b[1] - a[1])[0] : null,
       inTraining =
         state.query.specimenArchiveId &&
         state.references.some((ref) => ref.specimenArchiveId === state.query.specimenArchiveId && m.references.ids?.includes(ref.id));
     message(
       "#classifyStatus",
-      `Modell „${m.name}“ (${m.createdAt.slice(0, 10)}). Empfehlung nach Kreuzvalidierung: ${primary.name} → ` +
-        (top ? `${top[0]} (${(100 * top[1]).toFixed(0)} %)` : "nicht verfügbar für diese Aufnahme") +
+      `Modell „${m.name}“ (${m.createdAt.slice(0, 10)}). Standardverfahren: ${primary.name} → ` +
+        (r.conformal.unknown ? "keiner Referenzart ähnlich – Aufnahme und Referenzabdeckung prüfen" : top ? `${top[0]} (${(100 * top[1]).toFixed(0)} %${m.primary === "lda" ? "" : " relativer Ähnlichkeitsscore"})` : "nicht verfügbar für diese Aufnahme") +
         `; in der Entwicklungs-Kreuzvalidierung ${(100 * primary.balancedAccuracy).toFixed(1)} % balanciert richtig (kein unabhängiger Abschlusstest).` +
         (inTraining ? " Achtung: Dieses Exemplar war Teil des Trainings – das Ergebnis ist zu optimistisch." : ""),
-      inTraining ? "warn" : "ok",
+      inTraining || r.conformal.unknown ? "warn" : "ok",
     );
     footer("Klassifikation abgeschlossen.");
   } catch (e) {
@@ -264,17 +269,20 @@ function classify() {
       qs = querySimilarities(s.ctx, q),
       scores = rwrScores(s.ctx, s.labels, qs),
       knn = knnScores(s.ctx, s.labels, qs),
-      conformal = conformalPredict(qs, s.labels, calibrate(s.ctx, s.labels, s.groups), undefined, { referenceGroups: s.groups }),
+      distanceQs = querySimilarities(s.distanceCtx, s.toVector(state.query.features)),
+      distance = distanceScores(s.distanceCtx, s.labels, distanceQs),
+      conformal = conformalPredict(distanceQs, s.labels, calibrate(s.distanceCtx, s.labels, s.groups), undefined, { referenceGroups: s.groups }),
       best = Math.max(...qs);
-    renderResults({ scores, knn, conformal, best, n: refs.length + 1, blocks: s.blocks });
+    renderResults({ scores, knn, conformal, best, n: s.labels.length + 1, blocks: s.blocks });
     showWalk(s.ctx, qs, s.labels);
-    renderLDA(refs);
+    const lda = renderLDA(refs);
     drawEmbedding(s, q);
     message(
       "#classifyStatus",
       (self && refs.length < state.references.length
         ? "Hinweis: Dieses Exemplar ist selbst Referenz und wurde für die Klassifikation ausgeschlossen. "
-        : "") + `Merkmale: ${s.blocks.join(" + ")} · Modus: ${s.mode}.`,
+        : "") + `Live-Kandidat (${lda ? "Landmarken-LDA" : "Distanz-kNN"}): ${argmax(lda?.probabilities ?? distance)}. ` +
+        `Merkmale: ${s.blocks.join(" + ")} · Modus: ${s.mode}. Live-Typikalität ist heuristisch; ein kalibriertes Modell benötigt getrennte Tiere.`,
       "ok",
     );
     footer("Klassifikation abgeschlossen.");
@@ -323,7 +331,7 @@ function ldaBox() {
   if (!box) {
     box = document.createElement("div");
     box.id = "ldaResult";
-    $("#predictionSet").after(box);
+    $("#resultBars").before(box);
   }
   box.replaceChildren();
   return box;
@@ -349,7 +357,9 @@ function renderLDA(refs) {
   const model = fitCalibratedShapeLDA(data.X, data.labels, data.groups, { landmarkConfigs: data.configs }),
     specimens = {};
   data.groups.forEach((g, i) => (specimens[data.labels[i]] ??= new Set()).add(g));
-  renderLDAProbabilities(box, model.predictProba(data.q), model, Math.min(...Object.values(specimens).map((v) => v.size)));
+  const probabilities = model.predictProba(data.q);
+  renderLDAProbabilities(box, probabilities, model, Math.min(...Object.values(specimens).map((v) => v.size)));
+  return { probabilities, model };
 }
 function renderLDAProbabilities(box, probabilities, model, fewest) {
   const proba = Object.entries(probabilities).sort((a, b) => b[1] - a[1]);
@@ -559,7 +569,7 @@ function updateMode() {
     fly: "FlyHash (Mushroom Body)",
     dense: "Dense random projection",
     graph: "FlyWire graph",
-    none: "Control / no reservoir",
+    none: "Direkte Merkmale (Standard)",
   }[m];
   for (const id of ["#reservoirSize", "#activePct"]) $(id).disabled = m === "none" || m === "graph";
   $("#fanIn").disabled = m !== "fly";
@@ -604,10 +614,15 @@ window.addEventListener("wing-preprocessing-change", ({ detail }) => {
         features.blocks.landmarks = landmarks;
         features.landmarkScheme = host.landmarks.scheme;
       }
+      const specimenArchiveId = Object.values(images)[0]?.specimenArchiveId ?? null;
+      // A new animal must not inherit the previous reference form's identity.
+      // Existing reference identity is recovered by archive ID during inference.
+      if (specimenArchiveId !== lastAcceptedArchive) $("#specimenInput").value = "";
+      lastAcceptedArchive = specimenArchiveId;
       state.query = {
         features,
         preprocessing: { version: PREPROCESSING_VERSION, images },
-        specimenArchiveId: Object.values(images)[0]?.specimenArchiveId ?? null,
+        specimenArchiveId,
       };
     } catch (e) {
       message("#classifyStatus", "Merkmalsextraktion fehlgeschlagen: " + e.message, "error");
@@ -670,6 +685,7 @@ training = createTrainingView($("#trainingCard"), {
       sex: r.sex ?? null,
       series: r.series ?? null,
       features: r.features,
+      sourceHashes: Object.values(r.preprocessing?.images ?? {}).map((i) => i.sourceSha256).filter(Boolean),
     })),
   settings: reservoirSettings,
   preprocessingVersion: PREPROCESSING_VERSION,

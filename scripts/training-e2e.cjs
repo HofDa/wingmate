@@ -118,7 +118,7 @@ const heldOut = wings.find((w) => !chosen.has(w.specimen) && w.species === "Bomb
   const [download] = await Promise.all([page.waitForEvent("download"), page.click("#trainingCard button:has-text('Exportieren')")]),
     file = path.join(require("node:os").tmpdir(), "wingmate-e2e-model.json");
   await download.saveAs(file);
-  await page.selectOption("#trainingCard select", "");
+  await page.selectOption('#trainingCard select[aria-label="Aktives Modell"]', "");
   await page.waitForFunction(() => document.querySelector("#classifyBtn").textContent === "Bestimmen");
   const liveButton = await page.textContent("#classifyBtn");
   await page.evaluate(() => window.wingShell.show("referenzen"));
@@ -171,7 +171,7 @@ const heldOut = wings.find((w) => !chosen.has(w.specimen) && w.species === "Bomb
     report.title === "E2E Bombus" &&
     report.headings.some((h) => h.startsWith("Kreuzvalidierung")) &&
     report.headings.some((h) => h.startsWith("Transfer")) &&
-    report.cv.length === 3 &&
+    report.cv.length === 4 &&
     report.confusionRows === 3 &&
     report.button === "Mit Modell bestimmen" &&
     first.status.includes("Modell „E2E Bombus“") &&

@@ -11,6 +11,7 @@ import { fixture } from "../tests/fixtures.js";
 import { preprocess } from "../imaging/pipeline.js";
 import { extractFeatures } from "../classifier/features.js";
 import { register } from "../imaging/registration.js";
+import { animalReferences } from "../classifier/specimens.js";
 
 const result = {};
 
@@ -52,7 +53,8 @@ const labels = refs.map((r) => r.species), groups = refs.map((r) => r.group);
 const folds = stratifiedGroupFolds(labels, groups, 5);
 const predictions = { rwr: [], knn: [] };
 for (let fold = 0; fold < 5; fold++) {
-  const train = calibrationSplit(refs.filter((_, i) => folds[i] !== fold)).training;
+  const views = calibrationSplit(refs.filter((_, i) => folds[i] !== fold)).training;
+  const train = animalReferences(views, commonBlocks(views.map((r) => r.features)));
   const features = train.map((r) => r.features);
   const scaler = fitStandardizer(features, commonBlocks(features));
   const embed = makeEmbedder(settings.mode, scaler.dim, settings.params);

@@ -28,7 +28,11 @@ The remaining interface findings are addressed in [the UI remediation record](im
 
 Independent final testing, unseen-taxon testing, real paired WIP evidence, anatomical correspondence validation and learned image features remain research work. The local fixtures cannot supply those missing observations.
 
-## What the software currently does
+## Second remediation pass (2026-10-08)
+
+The code now fits one distinct-view prototype per animal, uses unnormalized standardized-feature distances for calibration, and defaults to landmark LDA or distance-kNN. Evaluation reports animal outcomes and bootstrap diagnostics; the graph and FlyHash remain comparators. Model format v3 requires retraining. A frozen external evaluator rejects detected training/calibration reuse and separates known-class errors from unseen-taxon rejection. See [the current development protocol](model-development.md) for acquisition assumptions, migration and reproduction. The descriptive pipeline below records the earlier implementation; the linked protocol describes the current defaults.
+
+## What the software did at the first review
 
 ```mermaid
 flowchart TD
