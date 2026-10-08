@@ -132,9 +132,14 @@ export function entropyBits(scores) {
 // nonconformity score. A label stays in the prediction set if the query is at
 // least as typical as an epsilon fraction of that label's own references. An
 // empty set means "not like any known taxon" – the open-set decision.
-export function labelNonconformity(qs, labels, label, excluded, m = CLASSIFIER_DEFAULTS.conformalM) {
-  const values = [];
-  for (let i = 0; i < qs.length; i++) if (!excluded[i] && labels[i] === label) values.push(qs[i]);
+export function labelNonconformity(qs, labels, label, excluded, m = CLASSIFIER_DEFAULTS.conformalM, groups = null) {
+  const byGroup = new Map();
+  for (let i = 0; i < qs.length; i++)
+    if (!excluded[i] && labels[i] === label) {
+      const group = groups ? groups[i] : i;
+      byGroup.set(group, Math.max(byGroup.get(group) ?? -Infinity, qs[i]));
+    }
+  const values = [...byGroup.values()];
   if (!values.length) return null;
   values.sort((a, b) => b - a);
   const top = values.slice(0, m);
@@ -145,21 +150,47 @@ export function labelNonconformity(qs, labels, label, excluded, m = CLASSIFIER_D
 // for itself).
 export function calibrate(ctx, labels, groups, opts = {}) {
   const { conformalM } = { ...CLASSIFIER_DEFAULTS, ...opts };
-  return Array.from({ length: ctx.n }, (_, i) => {
+  const scores = Array.from({ length: ctx.n }, (_, i) => {
     const excluded = groupMask(groups, groups[i]);
-    return labelNonconformity(ctx.sims.subarray(i * ctx.n, (i + 1) * ctx.n), labels, labels[i], excluded, conformalM);
+    return labelNonconformity(ctx.sims.subarray(i * ctx.n, (i + 1) * ctx.n), labels, labels[i], excluded, conformalM, groups);
   });
+  return specimenCalibration(scores, labels, groups, "grouped-jackknife-heuristic");
+}
+// One maximum score per independent animal. Duplicated views add no samples.
+export function specimenCalibration(scores, labels, groups, protocol = "split-specimen-max") {
+  const entries = new Map();
+  groups.forEach((group, i) => {
+    const previous = entries.get(group);
+    if (previous && previous.label !== labels[i]) throw Error(`Exemplar ${group} hat mehrere Taxa`);
+    if (scores[i] === null || !Number.isFinite(scores[i])) return;
+    entries.set(group, { group, label: labels[i], score: Math.max(previous?.score ?? -Infinity, scores[i]) });
+  });
+  const rows = [...entries.values()];
+  return { protocol, labels: rows.map((r) => r.label), groups: rows.map((r) => r.group), scores: rows.map((r) => r.score) };
+}
+export function splitCalibrate(ctx, labels, referenceGroups, embeddings, calibrationLabels, calibrationGroups, opts = {}) {
+  if (calibrationGroups.some((g) => referenceGroups.includes(g))) throw Error("Training und Kalibrierung müssen getrennte Exemplare verwenden.");
+  const { conformalM } = { ...CLASSIFIER_DEFAULTS, ...opts };
+  const scores = embeddings.map((e, i) => labelNonconformity(
+    querySimilarities(ctx, e), labels, calibrationLabels[i], noneExcluded(ctx.n), conformalM, referenceGroups,
+  ));
+  return specimenCalibration(scores, calibrationLabels, calibrationGroups);
 }
 export function conformalPredict(qs, labels, calibration, excluded = noneExcluded(qs.length), opts = {}) {
   const { conformalM, epsilon } = { ...CLASSIFIER_DEFAULTS, ...opts },
     minCalibration = Math.ceil(1 / epsilon) - 1,
-    result = { pValues: {}, set: [], uncalibrated: [], epsilon };
+    structured = calibration && !Array.isArray(calibration) && Array.isArray(calibration.scores),
+    protocol = structured ? calibration.protocol : "legacy-heuristic",
+    result = { pValues: {}, set: [], uncalibrated: [], counts: {}, epsilon, protocol };
   for (const label of [...new Set(labels)].sort()) {
-    const a = labelNonconformity(qs, labels, label, excluded, conformalM);
+    const a = labelNonconformity(qs, labels, label, excluded, conformalM, opts.referenceGroups);
     if (a === null) continue;
     const cal = [];
-    for (let i = 0; i < labels.length; i++)
-      if (!excluded[i] && labels[i] === label && calibration[i] !== null) cal.push(calibration[i]);
+    const calLabels = structured ? calibration.labels : labels;
+    const calScores = structured ? calibration.scores : calibration;
+    for (let i = 0; i < calLabels.length; i++)
+      if (calLabels[i] === label && Number.isFinite(calScores[i]) && (structured || !excluded[i])) cal.push(calScores[i]);
+    result.counts[label] = cal.length;
     const p = (cal.filter((c) => c >= a - 1e-12).length + 1) / (cal.length + 1);
     result.pValues[label] = p;
     // With fewer than 1/epsilon - 1 calibration scores, p can never drop below
@@ -167,7 +198,7 @@ export function conformalPredict(qs, labels, calibration, excluded = noneExclude
     if (cal.length < minCalibration) result.uncalibrated.push(label);
     if (p > epsilon) result.set.push(label);
   }
-  result.openSetValid = result.uncalibrated.length === 0 && Object.keys(result.pValues).length > 0;
+  result.openSetValid = protocol === "split-specimen-max" && result.uncalibrated.length === 0 && Object.keys(result.pValues).length > 0;
   result.unknown = result.openSetValid && result.set.length === 0;
   return result;
 }
@@ -224,7 +255,6 @@ export function summarize(labels, predictions) {
 // Conformal behaviour under grouped leave-one-out (known taxa) and
 // leave-one-taxon-out (simulated novel taxon).
 export function conformalEvaluation(ctx, labels, groups, opts = {}) {
-  const calibration = calibrate(ctx, labels, groups, opts);
   let covered = 0,
     known = 0,
     emptyKnown = 0,
@@ -232,7 +262,8 @@ export function conformalEvaluation(ctx, labels, groups, opts = {}) {
   for (let i = 0; i < ctx.n; i++) {
     const excluded = groupMask(groups, groups[i]);
     const qs = ctx.sims.subarray(i * ctx.n, (i + 1) * ctx.n),
-      r = conformalPredict(qs, labels, calibration, excluded, opts);
+      heldOutCalibration = calibrateWithout(ctx, labels, groups, excluded, opts),
+      r = conformalPredict(qs, labels, heldOutCalibration, excluded, { ...opts, referenceGroups: groups });
     if (!(labels[i] in r.pValues)) continue;
     known++;
     if (r.set.includes(labels[i])) covered++;
@@ -243,6 +274,7 @@ export function conformalEvaluation(ctx, labels, groups, opts = {}) {
   for (const taxon of [...new Set(labels)].sort()) {
     const excluded = Uint8Array.from(labels, (l) => (l === taxon ? 1 : 0));
     if (excluded.every(Boolean)) continue;
+    const calibration = calibrateWithout(ctx, labels, groups, excluded, opts);
     // Calibration must not see the held-out taxon either.
     let detected = 0,
       total = 0,
@@ -253,11 +285,12 @@ export function conformalEvaluation(ctx, labels, groups, opts = {}) {
         r = conformalPredict(qs, labels, calibration, excluded, opts);
       valid &&= r.openSetValid;
       total++;
-      if (!r.set.length) detected++;
+      if (r.unknown) detected++;
     }
     novel[taxon] = { queries: total, flaggedUnknown: detected / total, openSetValid: valid };
   }
   return {
+    protocol: "grouped-jackknife-heuristic",
     epsilon: { ...CLASSIFIER_DEFAULTS, ...opts }.epsilon,
     knownQueries: known,
     coverage: known ? covered / known : null,
@@ -265,4 +298,9 @@ export function conformalEvaluation(ctx, labels, groups, opts = {}) {
     meanSetSize: known ? setSize / known : null,
     novelTaxon: novel,
   };
+}
+function calibrateWithout(ctx, labels, groups, excluded, opts) {
+  const indices = labels.map((_, i) => i).filter((i) => !excluded[i]);
+  const sub = similarityContext(indices.map((i) => ctx.embeddings[i]));
+  return calibrate(sub, indices.map((i) => labels[i]), indices.map((i) => groups[i]), opts);
 }

@@ -5,6 +5,7 @@ import { createLandmarkEditor } from "./landmark-ui.js";
 import { emptyLandmarks, placed, landmarksCsv, scheme, toNormalized } from "../classifier/landmarks.js";
 const $ = (s) => document.querySelector(s);
 const items = { venation: null, wip: null };
+let pairConfirmed = false;
 let worker,
   sequence = 0,
   revision = 0,
@@ -93,6 +94,8 @@ function emit() {
   );
 }
 function invalidate() {
+  pairConfirmed = false;
+  for (const item of Object.values(items)) if (item) item.reviewReason = "";
   revision++;
   for (const item of Object.values(items)) if (item) item.accepted = false;
   emit();
@@ -249,9 +252,9 @@ function render() {
     const orientationSure = m.orientationConfidence !== "low";
     article.append(
       el("p", {
-        className: q.status === "GOOD" && orientationSure ? "qc-good" : "qc-review",
+        className: "qc-verdict",
         textContent:
-          (q.status === "GOOD" ? "Maske plausibel" : "Maske prüfen") +
+          (q.status === "GOOD" ? "Maske plausibel" : "Prüfhinweise vorhanden") +
           (orientationSure ? " · Orientierung wahrscheinlich richtig" : " · Orientierung unsicher") +
           (item.accepted ? " · freigegeben" : ""),
       }),
@@ -324,6 +327,15 @@ function render() {
         el("label", { className: "qc-check" }, check, " Standard geprüft: Basis links, Spitze rechts, Vorderrand oben"),
       ),
     );
+    if (needsReview(item)) {
+      const reason = el("input", {
+        type: "text", value: item.reviewReason ?? "", disabled: busy,
+        placeholder: "Warum ist die Aufnahme trotz Hinweis nutzbar?",
+        ariaLabel: `${type === "wip" ? "WIP" : "Venation"}: Begründung der Freigabe`,
+      });
+      reason.oninput = () => { item.reviewReason = reason.value; updateButtons(); };
+      article.append(el("label", { className: "qc-review-reason" }, "Freigabebegründung", reason));
+    }
     if (type === landmarkHost()) article.append(landmarkSection(item));
 
     // Corrections and exports are rarely needed: folded away.
@@ -438,8 +450,20 @@ function render() {
       ? `Mask IoU ${reg.maskIoU.toFixed(3)} · ${reg.status}. Konturabgleich; innere anatomische Entsprechung muss geprüft werden.`
       : "Registrierung ausstehend";
     align.append(p);
+    const confirmed = document.createElement("input");
+    confirmed.type = "checkbox";
+    confirmed.checked = pairConfirmed;
+    confirmed.disabled = busy;
+    confirmed.onchange = () => { pairConfirmed = confirmed.checked; updateButtons(); };
+    const label = document.createElement("label");
+    label.className = "qc-check";
+    label.append(confirmed, " Beide Bilder zeigen denselben Flügel desselben Tieres; innere Adern stimmen überein.");
+    align.append(label);
   }
   updateButtons();
+}
+function needsReview(item) {
+  return item.result?.metadata.maskQuality.status === "REVIEW" || item.result?.metadata.registration?.status === "REVIEW";
 }
 function updateButtons() {
   $("#qcAccept").disabled =
@@ -447,7 +471,8 @@ function updateButtons() {
     !Object.values(items).some(Boolean) ||
     Object.values(items)
       .filter(Boolean)
-      .some((i) => !i.result || !i.options.standardConfirmed);
+      .some((i) => !i.result || !i.options.standardConfirmed || (needsReview(i) && !i.reviewReason?.trim())) ||
+    (!!items.venation && !!items.wip && !pairConfirmed);
   $("#qcRecalculate").disabled = busy;
   $("#qcRestore").disabled = busy;
   $("#qcExport").disabled =
@@ -631,7 +656,12 @@ for (const [type, id] of [
   ["wip", "wipInput"],
 ]) {
   const input = $("#" + id);
-  input.addEventListener("change", () => load(type, input.files[0]));
+  input.addEventListener("change", () => {
+    const file = input.files[0];
+    // Allow selecting the same file again through “Bild ersetzen”.
+    input.value = "";
+    load(type, file);
+  });
   const zone = input.closest(".dropzone");
   zone.addEventListener("dragover", (e) => e.preventDefault());
   zone.addEventListener("drop", (e) => {
@@ -645,13 +675,21 @@ window.addEventListener("wing-rig-change", () => {
 });
 $("#qcDebug").onchange = render;
 $("#qcAccept").onclick = async () => {
+  updateButtons();
+  if ($("#qcAccept").disabled) return;
   const ticket = revision;
   busy = true;
   render();
   emit();
   try {
     for (const i of Object.values(items))
-      if (i) i.result.metadata.acceptedAt = new Date().toISOString();
+      if (i) {
+        i.result.metadata.acceptedAt = new Date().toISOString();
+        i.result.metadata.qcReview = {
+          required: needsReview(i), reason: i.reviewReason?.trim() || null,
+          pairConfirmed: !!items.venation && !!items.wip ? pairConfirmed : null,
+        };
+      }
     const id = await saveSpecimen(items);
     if (ticket !== revision) return;
     for (const i of Object.values(items))

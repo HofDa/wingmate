@@ -25,7 +25,6 @@
     <div class="appstatus">
       <span id="pwaStatus" role="status">App läuft im Browser.</span>
       <button id="updateApp" class="ghost small" hidden>Update laden</button>
-      <span id="updateHint" hidden>Neue Version bereit. Vorher ungespeicherte Arbeit sichern.</span>
     </div>
   </header>
 
@@ -41,7 +40,7 @@
         <button class="ghost" id="clearImagesBtn" hidden>Neues Exemplar</button>
       </div>
 
-      <section class="panel" aria-labelledby="h-images">
+      <section class="panel" id="uploadPanel" aria-labelledby="h-images">
         <div class="panel-head"><div><h2 id="h-images">Flügelbild hinzufügen</h2><p class="mini">Beginne mit einer Aufnahme, auf der die Aderung gut sichtbar ist.</p></div><span class="subtle-badge">01 · Bild</span></div>
         <div class="input-grid upload-grid">
           <div class="slot primary-slot">
@@ -206,9 +205,14 @@
         <div class="panel-head">
           <h2 id="h-collection">Sammlung</h2>
           <div class="buttonrow smallrow">
-            <button class="ghost" id="exportBtn">Exportieren</button>
             <label class="ghost filebutton">Importieren<input id="referenceInput" type="file" accept="application/json,.json" /></label>
-            <button class="danger ghost" id="clearRefsBtn">Alle löschen</button>
+            <details class="more">
+              <summary>Sammlung verwalten</summary>
+              <div class="buttonrow">
+                <button class="ghost" id="exportBtn">Exportieren</button>
+                <button class="danger ghost" id="clearRefsBtn">Alle löschen</button>
+              </div>
+            </details>
           </div>
         </div>
         <div class="reference-count" id="refCount">0 Referenzen</div>
@@ -259,7 +263,15 @@
             <input id="fanIn" type="number" min="1" max="30" step="1" value="6" />
           </label>
         </div>
-        <p class="mini">Merkmale werden auf den Referenzen standardisiert, dünn und binär auf Kenyon-Zellen projiziert; Winner-take-all behält die aktivsten Zellen. Gilt für die Live-Bestimmung und neues Training.</p>
+        <label>Eingabemodus
+          <select id="featureMode">
+            <option value="auto">Alle vorhandenen Merkmale (vollständig)</option>
+            <option value="venation">Venation und Form</option>
+            <option value="paired">Venation + WIP und Form (gepaart)</option>
+            <option value="landmarks">Landmarken</option>
+          </select>
+        </label>
+        <p class="mini">Der Eingabemodus gilt für Live-Bestimmung und neues Training. Fehlende Aufnahmen werden angezeigt. FlyHash verwendet feste Zufallsverbindungen; das Training lernt keine Bildmerkmale.</p>
         <div class="buttonrow">
           <label class="ghost filebutton">FlyWire-Subgraph importieren<input id="graphInput" type="file" accept="application/json,.json" /></label>
         </div>
@@ -271,6 +283,7 @@
       <section class="panel" aria-labelledby="h-app">
         <h2 id="h-app">App</h2>
         <p class="mini" id="installHint">Installieren: im Browsermenü „App installieren“ oder auf iPhone/iPad „Teilen → Zum Home-Bildschirm“.</p>
+        <p class="mini" id="updateHint" hidden>Neue Version bereit. Vorher ungespeicherte Arbeit sichern.</p>
         <button id="installApp" class="ghost" hidden>App installieren</button>
         <span id="footerState" hidden></span>
       </section>
@@ -284,7 +297,7 @@
           <dt>Fly-Reservoir</dt><dd>FlyHash (zentrieren, dünne binäre Expansion, Winner-take-all); dichte Projektion und „kein Reservoir“ als Kontrollen.</dd>
           <dt>Bestimmung</dt><dd>kNN-Graph mit Random Walk with Restart; unbekannte Arten über label-bedingte konforme Vorhersage.</dd>
         </dl>
-        <p class="warning">Methoden-Prototyp. Auf 814 realen <i>Bombus</i>-Flügeln ist Procrustes + LDA besser als der Graph-Klassifikator, und FlyHash schlägt die Kontrolle ohne Reservoir nicht (<code>test-data/landmark-benchmark.json</code>).</p>
+        <p class="warning">Methoden-Prototyp. Entwicklungswerte und Landmark-Benchmarks belegen keine Genauigkeit der vollständigen Bildverarbeitung an neuen Tieren. Dafür sind unabhängige Tests mit echten Flügelaufnahmen nötig.</p>
       </details>
     </section>
     <footer class="workspace-footer"><span>Wingmate · Wildbienen am Flügel bestimmen</span><span><span class="privacy-dot" aria-hidden="true"></span> Lokal auf deinem Gerät</span></footer>
@@ -299,7 +312,7 @@
       </label>
       <div class="cols3">
         <label>Exemplar-ID
-          <input id="specimenInput" type="text" placeholder="gleich für L/R-Flügel" />
+          <input id="specimenInput" type="text" placeholder="gleich für alle Flügel eines Tieres" required />
         </label>
         <label>Geschlecht
           <select id="sexInput"><option value="">unbekannt</option><option value="F">Weibchen</option><option value="M">Männchen</option></select>

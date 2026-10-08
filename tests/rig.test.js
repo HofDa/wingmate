@@ -224,3 +224,26 @@ test("rig profiles survive JSON export with typed arrays intact", () => {
   assert.ok(back.modalities.venation.illumination.data instanceof Float32Array);
   assert.throws(() => deserializeRig('{"version":"x"}'), /Rig-Profil/);
 });
+
+test("rig view with a dark frame around the light window still calibrates", () => {
+  // Half the image is the dark drawer frame (as in the printed rig), half the lit window.
+  const frameImg = (seed) => {
+    const r = mulberry32(seed),
+      data = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const lit = Math.abs(y - H / 2) < H / 4,
+          v = lit ? 220 * (1 - 0.3 * Math.abs(x - W / 2) / W) : 10;
+        data.set([v + r() * 3, v * 0.92 + r() * 3, v * 0.85 + r() * 3, 255], (y * W + x) * 4);
+      }
+    return { data, width: W, height: H };
+  };
+  const profile = buildModalityProfile({ kind: "transmitted", background: [1, 2, 3].map(frameImg) }),
+    corrected = flatFieldCorrect(frameImg(9), profile.illumination);
+  // Window region becomes uniform and neutral near the reference level.
+  const p = ((H / 2) * W + W / 4) * 4,
+    q = ((H / 2) * W + (3 * W) / 4) * 4;
+  assert.ok(Math.abs(corrected.data[p] - corrected.data[q]) < 12);
+  assert.ok(Math.abs(corrected.data[p] - corrected.data[p + 2]) < 10);
+  assert.ok(profile.illumination.target > 150);
+});

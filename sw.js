@@ -1,5 +1,5 @@
 // Bump this version whenever a cached application asset changes.
-const VERSION = 'v9';
+const VERSION = 'v11';
 const CACHE_PREFIX = `wingmate:${self.registration.scope}:`;
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const APP_FILES = [

@@ -1,6 +1,7 @@
 {
+  "version": 2,
   "kind": "classification-stage benchmark on real landmark coordinates; not an image-pipeline benchmark",
-  "source": "Molasy & Tofilski, Zenodo 19703357, landmarks-original.csv (unmodified)",
+  "source": "Molasy & Tofilski, Zenodo 19703357, landmarks-original.csv",
   "wings": 814,
   "specimens": 423,
   "perTaxon": {
@@ -8,464 +9,613 @@
     "Bombus lucorum": 124,
     "Bombus terrestris": 662
   },
-  "protocol": "grouped leave-one-out by specimen; GPA and z-scoring fitted without labels on all wings; LDA refitted per fold with equal priors",
-  "runtimeMs": 94534,
+  "protocol": "5-fold stratified grouped CV; GPA, scaling, PCA/LDA and nested temperature calibration fitted within training groups; disjoint specimen calibration holdout; development comparison, no independent final test",
+  "runtimeMs": 256234,
   "results": {
-    "Procrustes + LDA (Ledoit–Wolf shrinkage)": {
+    "RWR · no reservoir": {
+      "name": "Random Walk (kNN-Graph)",
       "evaluated": 814,
       "skipped": 0,
-      "accuracy": 0.961916461916462,
-      "balancedAccuracy": 0.9261559023765437,
+      "accuracy": 0.8427518427518428,
+      "balancedAccuracy": 0.7906787605403723,
       "recall": {
-        "Bombus cryptarum": 0.8928571428571429,
-        "Bombus lucorum": 0.9112903225806451,
-        "Bombus terrestris": 0.974320241691843
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus cryptarum": 25,
-          "Bombus lucorum": 3
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 113,
-          "Bombus cryptarum": 9,
-          "Bombus terrestris": 2
-        },
-        "Bombus terrestris": {
-          "Bombus terrestris": 645,
-          "Bombus lucorum": 13,
-          "Bombus cryptarum": 4
-        }
-      },
-      "ms": 8129
-    },
-    "Procrustes + LDA (shrinkage 0.1)": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.9606879606879607,
-      "balancedAccuracy": 0.9256523777038347,
-      "recall": {
-        "Bombus cryptarum": 0.8928571428571429,
-        "Bombus lucorum": 0.9112903225806451,
-        "Bombus terrestris": 0.972809667673716
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus cryptarum": 25,
-          "Bombus lucorum": 2,
-          "Bombus terrestris": 1
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 113,
-          "Bombus terrestris": 2,
-          "Bombus cryptarum": 9
-        },
-        "Bombus terrestris": {
-          "Bombus terrestris": 644,
-          "Bombus lucorum": 13,
-          "Bombus cryptarum": 5
-        }
-      },
-      "ms": 2880
-    },
-    "Procrustes + PCA + LDA (app default)": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.9606879606879607,
-      "balancedAccuracy": 0.9234677303335329,
-      "recall": {
-        "Bombus cryptarum": 0.8928571428571429,
-        "Bombus lucorum": 0.9032258064516129,
-        "Bombus terrestris": 0.974320241691843
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus cryptarum": 25,
-          "Bombus lucorum": 3
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 112,
-          "Bombus terrestris": 3,
-          "Bombus cryptarum": 9
-        },
-        "Bombus terrestris": {
-          "Bombus terrestris": 645,
-          "Bombus lucorum": 13,
-          "Bombus cryptarum": 4
-        }
-      },
-      "ms": 12583
-    },
-    "kNN · no reservoir": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.8538083538083538,
-      "balancedAccuracy": 0.7780059494804646,
-      "recall": {
-        "Bombus cryptarum": 0.6428571428571429,
-        "Bombus lucorum": 0.8225806451612904,
+        "Bombus cryptarum": 0.7857142857142857,
+        "Bombus lucorum": 0.717741935483871,
         "Bombus terrestris": 0.8685800604229608
       },
       "confusion": {
         "Bombus cryptarum": {
-          "Bombus cryptarum": 18,
-          "Bombus lucorum": 6,
-          "Bombus terrestris": 4
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 102,
-          "Bombus cryptarum": 19,
+          "Bombus cryptarum": 22,
+          "Bombus lucorum": 3,
           "Bombus terrestris": 3
         },
-        "Bombus terrestris": {
-          "Bombus terrestris": 575,
-          "Bombus lucorum": 54,
-          "Bombus cryptarum": 33
-        }
-      },
-      "ms": 270
-    },
-    "RWR · no reservoir": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.85995085995086,
-      "balancedAccuracy": 0.8248998751630076,
-      "recall": {
-        "Bombus cryptarum": 0.8571428571428571,
-        "Bombus lucorum": 0.7338709677419355,
-        "Bombus terrestris": 0.8836858006042296
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus cryptarum": 24,
-          "Bombus lucorum": 3,
-          "Bombus terrestris": 1
-        },
         "Bombus lucorum": {
-          "Bombus lucorum": 91,
-          "Bombus terrestris": 8,
-          "Bombus cryptarum": 25
-        },
-        "Bombus terrestris": {
-          "Bombus terrestris": 585,
-          "Bombus lucorum": 20,
-          "Bombus cryptarum": 57
-        }
-      },
-      "ms": 4080
-    },
-    "RWR · no reservoir, unbalanced": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.9103194103194103,
-      "balancedAccuracy": 0.5522528668420882,
-      "recall": {
-        "Bombus cryptarum": 0,
-        "Bombus lucorum": 0.6612903225806451,
-        "Bombus terrestris": 0.9954682779456193
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus terrestris": 26,
-          "Bombus lucorum": 2
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 82,
-          "Bombus terrestris": 42
-        },
-        "Bombus terrestris": {
-          "Bombus terrestris": 659,
-          "Bombus lucorum": 3
-        }
-      },
-      "ms": 4125
-    },
-    "kNN · FlyHash 2048 KC": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.8083538083538083,
-      "balancedAccuracy": 0.771732774583374,
-      "recall": {
-        "Bombus cryptarum": 0.75,
-        "Bombus lucorum": 0.7419354838709677,
-        "Bombus terrestris": 0.823262839879154
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus terrestris": 4,
-          "Bombus cryptarum": 21,
-          "Bombus lucorum": 3
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 92,
-          "Bombus cryptarum": 26,
-          "Bombus terrestris": 6
-        },
-        "Bombus terrestris": {
-          "Bombus terrestris": 545,
-          "Bombus lucorum": 76,
-          "Bombus cryptarum": 41
-        }
-      },
-      "ms": 286
-    },
-    "RWR · FlyHash 2048 KC": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.7886977886977887,
-      "balancedAccuracy": 0.812421976879632,
-      "recall": {
-        "Bombus cryptarum": 0.9642857142857143,
-        "Bombus lucorum": 0.6693548387096774,
-        "Bombus terrestris": 0.8036253776435045
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus cryptarum": 27,
-          "Bombus lucorum": 1
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 83,
-          "Bombus terrestris": 6,
-          "Bombus cryptarum": 35
-        },
-        "Bombus terrestris": {
-          "Bombus terrestris": 532,
-          "Bombus lucorum": 31,
-          "Bombus cryptarum": 99
-        }
-      },
-      "ms": 6316
-    },
-    "kNN · FlyHash 4096 KC": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.8157248157248157,
-      "balancedAccuracy": 0.7655373327578766,
-      "recall": {
-        "Bombus cryptarum": 0.7142857142857143,
-        "Bombus lucorum": 0.75,
-        "Bombus terrestris": 0.8323262839879154
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus terrestris": 5,
-          "Bombus cryptarum": 20,
-          "Bombus lucorum": 3
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 93,
-          "Bombus terrestris": 4,
-          "Bombus cryptarum": 27
-        },
-        "Bombus terrestris": {
-          "Bombus terrestris": 551,
-          "Bombus lucorum": 71,
-          "Bombus cryptarum": 40
-        }
-      },
-      "ms": 360
-    },
-    "RWR · FlyHash 4096 KC": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.8046683046683046,
-      "balancedAccuracy": 0.7913180280395951,
-      "recall": {
-        "Bombus cryptarum": 0.8571428571428571,
-        "Bombus lucorum": 0.6935483870967742,
-        "Bombus terrestris": 0.823262839879154
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus cryptarum": 24,
-          "Bombus terrestris": 1,
-          "Bombus lucorum": 3
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 86,
-          "Bombus cryptarum": 34,
-          "Bombus terrestris": 4
-        },
-        "Bombus terrestris": {
-          "Bombus terrestris": 545,
-          "Bombus lucorum": 24,
-          "Bombus cryptarum": 93
-        }
-      },
-      "ms": 5979
-    },
-    "kNN · dense random proj. (control)": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.8353808353808354,
-      "balancedAccuracy": 0.7753003745109778,
-      "recall": {
-        "Bombus cryptarum": 0.6785714285714286,
-        "Bombus lucorum": 0.7983870967741935,
-        "Bombus terrestris": 0.8489425981873112
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus cryptarum": 19,
-          "Bombus lucorum": 5,
-          "Bombus terrestris": 4
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 99,
-          "Bombus terrestris": 5,
-          "Bombus cryptarum": 20
-        },
-        "Bombus terrestris": {
-          "Bombus terrestris": 562,
-          "Bombus lucorum": 67,
-          "Bombus cryptarum": 33
-        }
-      },
-      "ms": 355
-    },
-    "RWR · dense random proj. (control)": {
-      "evaluated": 814,
-      "skipped": 0,
-      "accuracy": 0.8525798525798526,
-      "balancedAccuracy": 0.8262480218673572,
-      "recall": {
-        "Bombus cryptarum": 0.8571428571428571,
-        "Bombus lucorum": 0.75,
-        "Bombus terrestris": 0.8716012084592145
-      },
-      "confusion": {
-        "Bombus cryptarum": {
-          "Bombus cryptarum": 24,
-          "Bombus terrestris": 1,
-          "Bombus lucorum": 3
-        },
-        "Bombus lucorum": {
-          "Bombus lucorum": 93,
-          "Bombus terrestris": 5,
+          "Bombus lucorum": 89,
+          "Bombus terrestris": 9,
           "Bombus cryptarum": 26
         },
         "Bombus terrestris": {
-          "Bombus terrestris": 577,
-          "Bombus lucorum": 31,
-          "Bombus cryptarum": 54
+          "Bombus terrestris": 575,
+          "Bombus lucorum": 20,
+          "Bombus cryptarum": 67
         }
       },
-      "ms": 5416
-    }
-  },
-  "smallReference": {
-    "Procrustes + LDA (Ledoit–Wolf)": {
-      "meanBalancedAccuracy": 0.8094342393993287,
-      "sd": 0.06829883169525577,
-      "draws": 20
+      "ms": 131383
     },
-    "Procrustes + LDA (shrinkage 0.1)": {
-      "meanBalancedAccuracy": 0.8045070191978461,
-      "sd": 0.06241556499849823,
-      "draws": 20
-    },
-    "Procrustes + PCA + LDA (app default)": {
-      "meanBalancedAccuracy": 0.8168059543988913,
-      "sd": 0.08015137146755892,
-      "draws": 20
-    },
-    "RWR · no reservoir": {
-      "meanBalancedAccuracy": 0.6969487632676304,
-      "sd": 0.049285435253388646,
-      "draws": 20
-    },
-    "kNN · no reservoir": {
-      "meanBalancedAccuracy": 0.7568413983054798,
-      "sd": 0.049064482961961704,
-      "draws": 20
-    }
-  },
-  "calibration": {
-    "3": {
-      "LDA, uncalibrated": {
-        "meanTopProbability": 0.978199507038564,
-        "balancedAccuracy": 0.6665652763444014,
-        "brier": 0.6413923335214987
+    "KNN · no reservoir": {
+      "name": "kNN-Abstimmung",
+      "evaluated": 814,
+      "skipped": 0,
+      "accuracy": 0.8476658476658476,
+      "balancedAccuracy": 0.8004754479513275,
+      "recall": {
+        "Bombus cryptarum": 0.7142857142857143,
+        "Bombus lucorum": 0.8306451612903226,
+        "Bombus terrestris": 0.8564954682779456
       },
-      "PCA + LDA, temperature-calibrated (app)": {
-        "meanTopProbability": 0.5773276038620941,
-        "balancedAccuracy": 0.6569205700164235,
-        "brier": 0.5525413574032693
-      }
-    },
-    "5": {
-      "LDA, uncalibrated": {
-        "meanTopProbability": 0.9612688282427234,
-        "balancedAccuracy": 0.7266654335346903,
-        "brier": 0.4949928382880321
-      },
-      "PCA + LDA, temperature-calibrated (app)": {
-        "meanTopProbability": 0.6710129986084925,
-        "balancedAccuracy": 0.7217818733071627,
-        "brier": 0.4490589293116263
-      }
-    },
-    "10": {
-      "LDA, uncalibrated": {
-        "meanTopProbability": 0.9496764510634585,
-        "balancedAccuracy": 0.8306866007717857,
-        "brier": 0.2865932708894713
-      },
-      "PCA + LDA, temperature-calibrated (app)": {
-        "meanTopProbability": 0.773407161910167,
-        "balancedAccuracy": 0.8341897674567327,
-        "brier": 0.25817576612469234
-      }
-    }
-  },
-  "conformal": {
-    "none": {
-      "epsilon": 0.1,
-      "knownQueries": 814,
-      "coverage": 0.9004914004914005,
-      "falseUnknownRate": 0.06756756756756757,
-      "meanSetSize": 1.6793611793611793,
-      "novelTaxon": {
+      "confusion": {
         "Bombus cryptarum": {
-          "queries": 28,
-          "flaggedUnknown": 0.17857142857142858,
-          "openSetValid": true
+          "Bombus cryptarum": 20,
+          "Bombus terrestris": 4,
+          "Bombus lucorum": 4
         },
         "Bombus lucorum": {
-          "queries": 124,
-          "flaggedUnknown": 0.3790322580645161,
-          "openSetValid": true
+          "Bombus lucorum": 103,
+          "Bombus terrestris": 4,
+          "Bombus cryptarum": 17
         },
         "Bombus terrestris": {
-          "queries": 662,
-          "flaggedUnknown": 0.4395770392749245,
-          "openSetValid": true
+          "Bombus terrestris": 567,
+          "Bombus lucorum": 54,
+          "Bombus cryptarum": 41
         }
-      }
+      },
+      "ms": 131390
     },
-    "fly": {
-      "epsilon": 0.1,
-      "knownQueries": 814,
-      "coverage": 0.902948402948403,
-      "falseUnknownRate": 0.04054054054054054,
-      "meanSetSize": 1.8341523341523343,
-      "novelTaxon": {
+    "Procrustes + PCA + LDA": {
+      "name": "Procrustes + PCA + LDA (Landmarken)",
+      "evaluated": 814,
+      "skipped": 0,
+      "accuracy": 0.9484029484029484,
+      "balancedAccuracy": 0.8684582399376279,
+      "recall": {
+        "Bombus cryptarum": 0.75,
+        "Bombus lucorum": 0.8870967741935484,
+        "Bombus terrestris": 0.9682779456193353
+      },
+      "confusion": {
         "Bombus cryptarum": {
-          "queries": 28,
-          "flaggedUnknown": 0.14285714285714285,
-          "openSetValid": true
+          "Bombus cryptarum": 21,
+          "Bombus lucorum": 5,
+          "Bombus terrestris": 2
         },
         "Bombus lucorum": {
-          "queries": 124,
-          "flaggedUnknown": 0.2661290322580645,
-          "openSetValid": true
+          "Bombus lucorum": 110,
+          "Bombus terrestris": 5,
+          "Bombus cryptarum": 9
         },
         "Bombus terrestris": {
-          "queries": 662,
-          "flaggedUnknown": 0.2945619335347432,
-          "openSetValid": true
+          "Bombus terrestris": 641,
+          "Bombus lucorum": 18,
+          "Bombus cryptarum": 3
         }
+      },
+      "ms": 131391
+    },
+    "RWR · FlyHash 2048 KC": {
+      "name": "Random Walk (kNN-Graph)",
+      "evaluated": 814,
+      "skipped": 0,
+      "accuracy": 0.7997542997542998,
+      "balancedAccuracy": 0.791966577099605,
+      "recall": {
+        "Bombus cryptarum": 0.8928571428571429,
+        "Bombus lucorum": 0.6612903225806451,
+        "Bombus terrestris": 0.8217522658610272
+      },
+      "confusion": {
+        "Bombus cryptarum": {
+          "Bombus cryptarum": 25,
+          "Bombus terrestris": 2,
+          "Bombus lucorum": 1
+        },
+        "Bombus lucorum": {
+          "Bombus lucorum": 82,
+          "Bombus terrestris": 6,
+          "Bombus cryptarum": 36
+        },
+        "Bombus terrestris": {
+          "Bombus terrestris": 544,
+          "Bombus lucorum": 21,
+          "Bombus cryptarum": 97
+        }
+      },
+      "ms": 25899
+    },
+    "KNN · FlyHash 2048 KC": {
+      "name": "kNN-Abstimmung",
+      "evaluated": 814,
+      "skipped": 0,
+      "accuracy": 0.812039312039312,
+      "balancedAccuracy": 0.7596574639991461,
+      "recall": {
+        "Bombus cryptarum": 0.7142857142857143,
+        "Bombus lucorum": 0.7338709677419355,
+        "Bombus terrestris": 0.8308157099697885
+      },
+      "confusion": {
+        "Bombus cryptarum": {
+          "Bombus lucorum": 4,
+          "Bombus cryptarum": 20,
+          "Bombus terrestris": 4
+        },
+        "Bombus lucorum": {
+          "Bombus lucorum": 91,
+          "Bombus cryptarum": 26,
+          "Bombus terrestris": 7
+        },
+        "Bombus terrestris": {
+          "Bombus terrestris": 550,
+          "Bombus lucorum": 64,
+          "Bombus cryptarum": 48
+        }
+      },
+      "ms": 25900
+    },
+    "RWR · FlyHash 4096 KC": {
+      "name": "Random Walk (kNN-Graph)",
+      "evaluated": 814,
+      "skipped": 0,
+      "accuracy": 0.800982800982801,
+      "balancedAccuracy": 0.7968393965129176,
+      "recall": {
+        "Bombus cryptarum": 0.8928571428571429,
+        "Bombus lucorum": 0.6774193548387096,
+        "Bombus terrestris": 0.8202416918429003
+      },
+      "confusion": {
+        "Bombus cryptarum": {
+          "Bombus cryptarum": 25,
+          "Bombus terrestris": 2,
+          "Bombus lucorum": 1
+        },
+        "Bombus lucorum": {
+          "Bombus lucorum": 84,
+          "Bombus terrestris": 9,
+          "Bombus cryptarum": 31
+        },
+        "Bombus terrestris": {
+          "Bombus terrestris": 543,
+          "Bombus lucorum": 25,
+          "Bombus cryptarum": 94
+        }
+      },
+      "ms": 63343
+    },
+    "KNN · FlyHash 4096 KC": {
+      "name": "kNN-Abstimmung",
+      "evaluated": 814,
+      "skipped": 0,
+      "accuracy": 0.816953316953317,
+      "balancedAccuracy": 0.7476076777070833,
+      "recall": {
+        "Bombus cryptarum": 0.6428571428571429,
+        "Bombus lucorum": 0.7661290322580645,
+        "Bombus terrestris": 0.8338368580060423
+      },
+      "confusion": {
+        "Bombus cryptarum": {
+          "Bombus lucorum": 6,
+          "Bombus cryptarum": 18,
+          "Bombus terrestris": 4
+        },
+        "Bombus lucorum": {
+          "Bombus lucorum": 95,
+          "Bombus cryptarum": 25,
+          "Bombus terrestris": 4
+        },
+        "Bombus terrestris": {
+          "Bombus terrestris": 552,
+          "Bombus lucorum": 62,
+          "Bombus cryptarum": 48
+        }
+      },
+      "ms": 63345
+    },
+    "RWR · dense random projection": {
+      "name": "Random Walk (kNN-Graph)",
+      "evaluated": 814,
+      "skipped": 0,
+      "accuracy": 0.8390663390663391,
+      "balancedAccuracy": 0.7755823019198909,
+      "recall": {
+        "Bombus cryptarum": 0.75,
+        "Bombus lucorum": 0.7096774193548387,
+        "Bombus terrestris": 0.8670694864048338
+      },
+      "confusion": {
+        "Bombus cryptarum": {
+          "Bombus cryptarum": 21,
+          "Bombus terrestris": 3,
+          "Bombus lucorum": 4
+        },
+        "Bombus lucorum": {
+          "Bombus lucorum": 88,
+          "Bombus terrestris": 9,
+          "Bombus cryptarum": 27
+        },
+        "Bombus terrestris": {
+          "Bombus terrestris": 574,
+          "Bombus lucorum": 28,
+          "Bombus cryptarum": 60
+        }
+      },
+      "ms": 35597
+    },
+    "KNN · dense random projection": {
+      "name": "kNN-Abstimmung",
+      "evaluated": 814,
+      "skipped": 0,
+      "accuracy": 0.8316953316953317,
+      "balancedAccuracy": 0.7602039158904962,
+      "recall": {
+        "Bombus cryptarum": 0.6428571428571429,
+        "Bombus lucorum": 0.7903225806451613,
+        "Bombus terrestris": 0.8474320241691843
+      },
+      "confusion": {
+        "Bombus cryptarum": {
+          "Bombus cryptarum": 18,
+          "Bombus terrestris": 3,
+          "Bombus lucorum": 7
+        },
+        "Bombus lucorum": {
+          "Bombus lucorum": 98,
+          "Bombus terrestris": 4,
+          "Bombus cryptarum": 22
+        },
+        "Bombus terrestris": {
+          "Bombus terrestris": 561,
+          "Bombus lucorum": 67,
+          "Bombus cryptarum": 34
+        }
+      },
+      "ms": 35597
+    }
+  },
+  "evaluations": {
+    "no reservoir": {
+      "folds": 5,
+      "protocol": "nach Exemplar gruppiert; alle Anpassungen nur im Trainingsfold",
+      "selectionOnly": true,
+      "methods": {
+        "rwr": {
+          "name": "Random Walk (kNN-Graph)",
+          "evaluated": 814,
+          "skipped": 0,
+          "accuracy": 0.8427518427518428,
+          "balancedAccuracy": 0.7906787605403723,
+          "recall": {
+            "Bombus cryptarum": 0.7857142857142857,
+            "Bombus lucorum": 0.717741935483871,
+            "Bombus terrestris": 0.8685800604229608
+          },
+          "confusion": {
+            "Bombus cryptarum": {
+              "Bombus cryptarum": 22,
+              "Bombus lucorum": 3,
+              "Bombus terrestris": 3
+            },
+            "Bombus lucorum": {
+              "Bombus lucorum": 89,
+              "Bombus terrestris": 9,
+              "Bombus cryptarum": 26
+            },
+            "Bombus terrestris": {
+              "Bombus terrestris": 575,
+              "Bombus lucorum": 20,
+              "Bombus cryptarum": 67
+            }
+          }
+        },
+        "knn": {
+          "name": "kNN-Abstimmung",
+          "evaluated": 814,
+          "skipped": 0,
+          "accuracy": 0.8476658476658476,
+          "balancedAccuracy": 0.8004754479513275,
+          "recall": {
+            "Bombus cryptarum": 0.7142857142857143,
+            "Bombus lucorum": 0.8306451612903226,
+            "Bombus terrestris": 0.8564954682779456
+          },
+          "confusion": {
+            "Bombus cryptarum": {
+              "Bombus cryptarum": 20,
+              "Bombus terrestris": 4,
+              "Bombus lucorum": 4
+            },
+            "Bombus lucorum": {
+              "Bombus lucorum": 103,
+              "Bombus terrestris": 4,
+              "Bombus cryptarum": 17
+            },
+            "Bombus terrestris": {
+              "Bombus terrestris": 567,
+              "Bombus lucorum": 54,
+              "Bombus cryptarum": 41
+            }
+          }
+        },
+        "lda": {
+          "name": "Procrustes + PCA + LDA (Landmarken)",
+          "evaluated": 814,
+          "skipped": 0,
+          "accuracy": 0.9484029484029484,
+          "balancedAccuracy": 0.8684582399376279,
+          "recall": {
+            "Bombus cryptarum": 0.75,
+            "Bombus lucorum": 0.8870967741935484,
+            "Bombus terrestris": 0.9682779456193353
+          },
+          "confusion": {
+            "Bombus cryptarum": {
+              "Bombus cryptarum": 21,
+              "Bombus lucorum": 5,
+              "Bombus terrestris": 2
+            },
+            "Bombus lucorum": {
+              "Bombus lucorum": 110,
+              "Bombus terrestris": 5,
+              "Bombus cryptarum": 9
+            },
+            "Bombus terrestris": {
+              "Bombus terrestris": 641,
+              "Bombus lucorum": 18,
+              "Bombus cryptarum": 3
+            }
+          }
+        }
+      },
+      "ldaCalibration": {
+        "meanTopProbability": 0.881871827946346,
+        "balancedAccuracy": 0.8684582399376288,
+        "brier": 0.1613246886966327
+      },
+      "conformal": {
+        "protocol": "split-specimen-max",
+        "epsilon": 0.1,
+        "knownQueries": 814,
+        "validQueries": 0,
+        "coverage": null,
+        "falseUnknownRate": null,
+        "meanSetSize": null,
+        "novelTaxon": {}
+      }
+    },
+    "FlyHash 2048 KC": {
+      "folds": 5,
+      "protocol": "nach Exemplar gruppiert; alle Anpassungen nur im Trainingsfold",
+      "selectionOnly": true,
+      "methods": {
+        "rwr": {
+          "name": "Random Walk (kNN-Graph)",
+          "evaluated": 814,
+          "skipped": 0,
+          "accuracy": 0.7997542997542998,
+          "balancedAccuracy": 0.791966577099605,
+          "recall": {
+            "Bombus cryptarum": 0.8928571428571429,
+            "Bombus lucorum": 0.6612903225806451,
+            "Bombus terrestris": 0.8217522658610272
+          },
+          "confusion": {
+            "Bombus cryptarum": {
+              "Bombus cryptarum": 25,
+              "Bombus terrestris": 2,
+              "Bombus lucorum": 1
+            },
+            "Bombus lucorum": {
+              "Bombus lucorum": 82,
+              "Bombus terrestris": 6,
+              "Bombus cryptarum": 36
+            },
+            "Bombus terrestris": {
+              "Bombus terrestris": 544,
+              "Bombus lucorum": 21,
+              "Bombus cryptarum": 97
+            }
+          }
+        },
+        "knn": {
+          "name": "kNN-Abstimmung",
+          "evaluated": 814,
+          "skipped": 0,
+          "accuracy": 0.812039312039312,
+          "balancedAccuracy": 0.7596574639991461,
+          "recall": {
+            "Bombus cryptarum": 0.7142857142857143,
+            "Bombus lucorum": 0.7338709677419355,
+            "Bombus terrestris": 0.8308157099697885
+          },
+          "confusion": {
+            "Bombus cryptarum": {
+              "Bombus lucorum": 4,
+              "Bombus cryptarum": 20,
+              "Bombus terrestris": 4
+            },
+            "Bombus lucorum": {
+              "Bombus lucorum": 91,
+              "Bombus cryptarum": 26,
+              "Bombus terrestris": 7
+            },
+            "Bombus terrestris": {
+              "Bombus terrestris": 550,
+              "Bombus lucorum": 64,
+              "Bombus cryptarum": 48
+            }
+          }
+        }
+      },
+      "conformal": {
+        "protocol": "split-specimen-max",
+        "epsilon": 0.1,
+        "knownQueries": 814,
+        "validQueries": 0,
+        "coverage": null,
+        "falseUnknownRate": null,
+        "meanSetSize": null,
+        "novelTaxon": {}
+      }
+    },
+    "FlyHash 4096 KC": {
+      "folds": 5,
+      "protocol": "nach Exemplar gruppiert; alle Anpassungen nur im Trainingsfold",
+      "selectionOnly": true,
+      "methods": {
+        "rwr": {
+          "name": "Random Walk (kNN-Graph)",
+          "evaluated": 814,
+          "skipped": 0,
+          "accuracy": 0.800982800982801,
+          "balancedAccuracy": 0.7968393965129176,
+          "recall": {
+            "Bombus cryptarum": 0.8928571428571429,
+            "Bombus lucorum": 0.6774193548387096,
+            "Bombus terrestris": 0.8202416918429003
+          },
+          "confusion": {
+            "Bombus cryptarum": {
+              "Bombus cryptarum": 25,
+              "Bombus terrestris": 2,
+              "Bombus lucorum": 1
+            },
+            "Bombus lucorum": {
+              "Bombus lucorum": 84,
+              "Bombus terrestris": 9,
+              "Bombus cryptarum": 31
+            },
+            "Bombus terrestris": {
+              "Bombus terrestris": 543,
+              "Bombus lucorum": 25,
+              "Bombus cryptarum": 94
+            }
+          }
+        },
+        "knn": {
+          "name": "kNN-Abstimmung",
+          "evaluated": 814,
+          "skipped": 0,
+          "accuracy": 0.816953316953317,
+          "balancedAccuracy": 0.7476076777070833,
+          "recall": {
+            "Bombus cryptarum": 0.6428571428571429,
+            "Bombus lucorum": 0.7661290322580645,
+            "Bombus terrestris": 0.8338368580060423
+          },
+          "confusion": {
+            "Bombus cryptarum": {
+              "Bombus lucorum": 6,
+              "Bombus cryptarum": 18,
+              "Bombus terrestris": 4
+            },
+            "Bombus lucorum": {
+              "Bombus lucorum": 95,
+              "Bombus cryptarum": 25,
+              "Bombus terrestris": 4
+            },
+            "Bombus terrestris": {
+              "Bombus terrestris": 552,
+              "Bombus lucorum": 62,
+              "Bombus cryptarum": 48
+            }
+          }
+        }
+      },
+      "conformal": {
+        "protocol": "split-specimen-max",
+        "epsilon": 0.1,
+        "knownQueries": 814,
+        "validQueries": 0,
+        "coverage": null,
+        "falseUnknownRate": null,
+        "meanSetSize": null,
+        "novelTaxon": {}
+      }
+    },
+    "dense random projection": {
+      "folds": 5,
+      "protocol": "nach Exemplar gruppiert; alle Anpassungen nur im Trainingsfold",
+      "selectionOnly": true,
+      "methods": {
+        "rwr": {
+          "name": "Random Walk (kNN-Graph)",
+          "evaluated": 814,
+          "skipped": 0,
+          "accuracy": 0.8390663390663391,
+          "balancedAccuracy": 0.7755823019198909,
+          "recall": {
+            "Bombus cryptarum": 0.75,
+            "Bombus lucorum": 0.7096774193548387,
+            "Bombus terrestris": 0.8670694864048338
+          },
+          "confusion": {
+            "Bombus cryptarum": {
+              "Bombus cryptarum": 21,
+              "Bombus terrestris": 3,
+              "Bombus lucorum": 4
+            },
+            "Bombus lucorum": {
+              "Bombus lucorum": 88,
+              "Bombus terrestris": 9,
+              "Bombus cryptarum": 27
+            },
+            "Bombus terrestris": {
+              "Bombus terrestris": 574,
+              "Bombus lucorum": 28,
+              "Bombus cryptarum": 60
+            }
+          }
+        },
+        "knn": {
+          "name": "kNN-Abstimmung",
+          "evaluated": 814,
+          "skipped": 0,
+          "accuracy": 0.8316953316953317,
+          "balancedAccuracy": 0.7602039158904962,
+          "recall": {
+            "Bombus cryptarum": 0.6428571428571429,
+            "Bombus lucorum": 0.7903225806451613,
+            "Bombus terrestris": 0.8474320241691843
+          },
+          "confusion": {
+            "Bombus cryptarum": {
+              "Bombus cryptarum": 18,
+              "Bombus terrestris": 3,
+              "Bombus lucorum": 7
+            },
+            "Bombus lucorum": {
+              "Bombus lucorum": 98,
+              "Bombus terrestris": 4,
+              "Bombus cryptarum": 22
+            },
+            "Bombus terrestris": {
+              "Bombus terrestris": 561,
+              "Bombus lucorum": 67,
+              "Bombus cryptarum": 34
+            }
+          }
+        }
+      },
+      "conformal": {
+        "protocol": "split-specimen-max",
+        "epsilon": 0.1,
+        "knownQueries": 814,
+        "validQueries": 0,
+        "coverage": null,
+        "falseUnknownRate": null,
+        "meanSetSize": null,
+        "novelTaxon": {}
       }
     }
   }

@@ -53,19 +53,27 @@ export function createTrainingView(root, { references, settings, preprocessingVe
     el(
       "p",
       { className: "mini" },
-      "Training prüft jedes Verfahren per Kreuzvalidierung (Exemplare zusammen, Arten gleichmäßig verteilt), wählt das beste und friert es als Modell ein. Ist ein Modell aktiv, bestimmt „Bestimmen“ damit.",
+      "Trainiere ein festes Modell aus deiner Sammlung. Ein aktives Modell wird für neue Bestimmungen verwendet.",
     ),
-    ui.readiness,
     el("div", { className: "buttonrow" }, el("label", { className: "grow" }, "Modellname", ui.name), ui.train),
+    el("details", { className: "disclosure-inline" },
+      el("summary", { textContent: "Referenzbereitschaft & Trainingsverfahren" }),
+      ui.readiness,
+      el("p", { className: "mini", textContent: "Training vergleicht Verfahren mit getrennten Tieren und passt jeden Trainingsfold neu an. Separate Tiere dienen der Kalibrierung. Die Auswahlwerte brauchen einen unabhängigen Abschlusstest." })),
     ui.progress,
     ui.status,
     el(
       "div",
       { className: "buttonrow" },
       el("label", { className: "grow" }, "Aktives Modell", ui.select),
-      el("button", { type: "button", className: "ghost", textContent: "Exportieren", onclick: exportActive }),
-      el("label", { className: "ghost filebutton" }, "Importieren", el("input", { type: "file", accept: "application/json,.json", hidden: true, onchange: importFile })),
-      el("button", { type: "button", className: "ghost danger", textContent: "Löschen", onclick: removeActive }),
+      el("details", { className: "more" },
+        el("summary", { textContent: "Modelle verwalten" }),
+        el("div", { className: "buttonrow" },
+          el("button", { type: "button", className: "ghost", textContent: "Exportieren", onclick: exportActive }),
+          el("label", { className: "ghost filebutton" }, "Importieren", el("input", { type: "file", accept: "application/json,.json", hidden: true, onchange: importFile })),
+          el("button", { type: "button", className: "ghost danger", textContent: "Löschen", onclick: removeActive }),
+        ),
+      ),
     ),
     ui.stale,
     ui.report,
@@ -80,7 +88,7 @@ export function createTrainingView(root, { references, settings, preprocessingVe
       rows = Object.entries(info).map(([t, v]) => {
         const status = el("span", {
           className: "train-" + v.status,
-          textContent: v.status === "ready" ? "✓ bereit" : v.status === "weak" ? `⚠ < ${READY_SPECIMENS} Exemplare` : "✗ < 5 Exemplare",
+          textContent: v.status === "ready" ? "≥ 10 Exemplare" : v.status === "weak" ? `⚠ < ${READY_SPECIMENS} Exemplare` : "✗ < 5 Exemplare",
         });
         return [
           t,
@@ -99,10 +107,12 @@ export function createTrainingView(root, { references, settings, preprocessingVe
       el("p", {
         className: "mini",
         textContent:
-          `Empfehlung: ≥ ${READY_SPECIMENS} Exemplare pro Art aus mehreren Serien/Fundorten, beide Geschlechter. Kreuzvalidierung sagt nur voraus, was die Referenzen abdecken: Auf den Bombus-Daten ergaben Referenzen aus einer einzigen Sammlung 100 % in der Kreuzvalidierung, aber 70 % auf anderen Sammlungen.`,
+          `Richtwert: ≥ ${READY_SPECIMENS} unabhängige Exemplare pro Art aus mehreren Serien/Fundorten, beide Geschlechter. Das ist keine Qualitätsgarantie. Für die Kalibrierung werden getrennte Tiere zurückgehalten; kleine Datensätze erlauben keinen belastbaren Ausschluss unbekannter Arten.`,
       }),
     );
-    ui.train.disabled = !!worker || Object.keys(info).length < 2;
+    const missingIds = r.filter((x) => !x.group).length;
+    if (missingIds) ui.readiness.append(el("p", { className: "warning", textContent: `${missingIds} Referenzen brauchen eine stabile Exemplar-ID. IDs im Referenzexport ergänzen und wieder importieren; alle Flügel eines Tieres verwenden dieselbe ID.` }));
+    ui.train.disabled = !!worker || Object.keys(info).length < 2 || missingIds > 0;
     renderStale();
   }
   function renderStale() {
@@ -112,7 +122,7 @@ export function createTrainingView(root, { references, settings, preprocessingVe
       return;
     }
     const r = refs(),
-      same = referenceFingerprint(r.map((x) => x.id)) === active.model.references.fingerprint;
+      same = referenceFingerprint(r) === active.model.references.fingerprint;
     ui.stale.textContent = same
       ? `Modell passt zu den aktuellen ${r.length} Referenzen.`
       : `Referenzen haben sich seit dem Training geändert (jetzt ${r.length}, trainiert mit ${active.model.references.count}). Das Modell bleibt unverändert – für neue Referenzen neu trainieren.`;
@@ -202,10 +212,11 @@ export function createTrainingView(root, { references, settings, preprocessingVe
       el("h3", { textContent: `${m.name}` }),
       el("p", {
         className: "mini",
-        textContent: `Trainiert ${m.createdAt.slice(0, 16).replace("T", " ")} · ${m.references.count} Referenzen · ${Object.keys(m.taxa).length} Taxa · Merkmale ${m.blocks.join(" + ")} · Reservoir ${m.reservoir.mode} · ★ = gewähltes Verfahren.`,
+        textContent: `Trainiert ${m.createdAt.slice(0, 16).replace("T", " ")} · ${m.references.trainingCount} Trainingsflügel + ${m.references.calibrationSpecimens} unabhängige Kalibrierungsexemplare · ${Object.keys(m.taxa).length} Taxa · Merkmale ${m.blocks.join(" + ")} · Reservoir ${m.reservoir.mode} · ★ = gewähltes Verfahren.`,
       }),
       el("h4", { textContent: `Kreuzvalidierung (${e.folds}-fach, ${e.protocol})` }),
       table(["Verfahren", "Balanciert", "Genauigkeit", "ausgewertet"], methodRows(e.methods)),
+      el("p", { className: "mini", textContent: "Kalibrierungstiere je Taxon: " + Object.keys(m.taxa).map((t) => `${t}: ${m.calibration.labels.filter((l) => l === t).length}`).join(" · ") + ". Bei ε = 0,1 braucht jedes Taxon mindestens neun unabhängige Kalibrierungstiere für die nötige p-Wert-Auflösung." }),
     );
     if (e.seriesTransfer)
       ui.report.append(
@@ -227,7 +238,7 @@ export function createTrainingView(root, { references, settings, preprocessingVe
         className: "mini",
         textContent:
           `Offene Menge (ε = ${c.epsilon}): Abdeckung ${pct(c.coverage)}, fälschlich „unbekannt“ ${pct(c.falseUnknownRate)}, mittlere Setgröße ${c.meanSetSize?.toFixed(2) ?? "—"}. ` +
-          `Zurückgehaltene Art als unbekannt erkannt: ${Object.entries(c.novelTaxon).map(([t, v]) => `${t} ${pct(v.flaggedUnknown)}${v.openSetValid ? "" : " (nicht kalibriert)"}`).join(", ")}.`,
+          `Auswertbare Kalibrierungsabfragen: ${c.validQueries}/${c.knownQueries}. Erkennung unbekannter Arten braucht einen separaten Test mit zurückgehaltenen Taxa.`,
       }),
     );
     const confusion = e.methods[m.primary].confusion,

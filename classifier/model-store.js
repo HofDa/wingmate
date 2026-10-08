@@ -39,6 +39,6 @@ export function setActiveModelId(id) {
 export const serializeModel = (model) => stringifyTyped(model);
 export function deserializeModel(text) {
   const model = parseTyped(text);
-  if (model?.version !== MODEL_VERSION) throw Error("Kein Modell der Version " + MODEL_VERSION);
+  if (model?.version !== MODEL_VERSION) throw Error("Modell-Version nicht unterstützt. Referenzen mit der aktuellen Version neu trainieren (" + MODEL_VERSION + ").");
   return model;
 }

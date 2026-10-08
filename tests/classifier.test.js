@@ -21,6 +21,7 @@ import {
   argmax,
   calibrate,
   conformalPredict,
+  splitCalibrate,
   leaveOneOut,
 } from "../classifier/classify.js";
 import { traceWalk, summarizeWalk } from "../walk.js";
@@ -55,8 +56,10 @@ test("size block only with a reliable metric size", () => {
 test("features ignore background outside the mask", () => {
   const a = extractFeatures({ venation: normalized({ bg: 240 }) }),
     b = extractFeatures({ venation: normalized({ bg: 205 }) });
-  for (const block of ["shape", "venation"])
-    assert.ok(cosine(a.blocks[block], b.blocks[block]) > 0.999, block);
+  assert.ok(cosine(a.blocks.shape, b.blocks.shape) > 0.999);
+  // Uniform membranes have no vein signal; zero vectors have undefined cosine.
+  assert.ok(a.blocks.venation.every((v) => v === 0));
+  assert.deepEqual(a.blocks.venation, b.blocks.venation);
 });
 test("WIP features respond to membrane colour", () => {
   const grey = extractFeatures({ wip: normalized({ bg: 0 }) }),
@@ -239,11 +242,15 @@ test("grouped leave-one-out prevents duplicate wings from vouching for each othe
 test("conformal: calibrated coverage, open-set rejection, explicit under-calibration", () => {
   const { embeddings, labels, groups } = clusters(40, 30, 21),
     ctx = similarityContext(embeddings),
-    calibration = calibrate(ctx, labels, groups),
-    inside = conformalPredict(querySimilarities(ctx, Float32Array.from([1, 0, 0, 0, 0, 0])), labels, calibration);
+    calibrationIndices = labels.map((l, i) => i).filter((i) => i < 15 || (i >= 40 && i < 52)),
+    trainingIndices = labels.map((l, i) => i).filter((i) => !calibrationIndices.includes(i)),
+    train = similarityContext(trainingIndices.map((i) => embeddings[i])),
+    trainLabels = trainingIndices.map((i) => labels[i]), trainGroups = trainingIndices.map((i) => groups[i]),
+    calibration = splitCalibrate(train, trainLabels, trainGroups, calibrationIndices.map((i) => embeddings[i]), calibrationIndices.map((i) => labels[i]), calibrationIndices.map((i) => groups[i])),
+    inside = conformalPredict(querySimilarities(train, Float32Array.from([1, 0, 0, 0, 0, 0])), trainLabels, calibration, undefined, { referenceGroups: trainGroups });
   assert.ok(inside.openSetValid);
   assert.deepEqual(inside.set, ["A"]);
-  const novel = conformalPredict(querySimilarities(ctx, Float32Array.from([0, 0, 0, 0, 0, -1])), labels, calibration);
+  const novel = conformalPredict(querySimilarities(train, Float32Array.from([0, 0, 0, 0, 0, -1])), trainLabels, calibration, undefined, { referenceGroups: trainGroups });
   assert.equal(novel.unknown, true);
   const few = clusters(40, 4, 21),
     fctx = similarityContext(few.embeddings),
@@ -291,4 +298,40 @@ test("pca2 finds the dominant axis", () => {
     p = pca2(pts);
   const spread = (k) => Math.max(...p.map((v) => v[k])) - Math.min(...p.map((v) => v[k]));
   assert.ok(spread(0) > 40 * spread(1));
+});
+
+
+test("duplicating wings does not increase calibration animals or certify live coverage", () => {
+  const ctx = similarityContext([[1, 0, 0], [0, 1, 0]]), labels = ["A", "B"], groups = ["train-A", "train-B"];
+  const points = [], calLabels = [], calGroups = [];
+  for (const taxon of labels) for (let i = 0; i < 5; i++) {
+    points.push(taxon === "A" ? [1, 0.1, 0] : [0.1, 1, 0]); calLabels.push(taxon); calGroups.push(taxon + i);
+  }
+  const once = splitCalibrate(ctx, labels, groups, points, calLabels, calGroups);
+  const twice = splitCalibrate(ctx, labels, groups, [...points, ...points], [...calLabels, ...calLabels], [...calGroups, ...calGroups]);
+  assert.deepEqual(once, twice);
+  const qs = querySimilarities(ctx, [0, 0, 1]);
+  const result = conformalPredict(qs, labels, twice, undefined, { referenceGroups: groups });
+  assert.deepEqual(result.counts, { A: 5, B: 5 });
+  assert.equal(result.openSetValid, false);
+  assert.equal(result.unknown, false);
+  const heuristic = conformalPredict(qs, labels, calibrate(ctx, labels, groups));
+  assert.equal(heuristic.protocol, "grouped-jackknife-heuristic");
+  assert.equal(heuristic.openSetValid, false);
+  assert.throws(() => splitCalibrate(ctx, labels, groups, points, calLabels, calGroups.map(() => "train-A")), /getrennte Exemplare/);
+});
+
+test("no-vein silhouette is reviewed and has no boundary-derived vein features", () => {
+  const image = preprocess(fixture(), options);
+  assert.equal(image.metadata.captureQuality.sharpnessInWing, 0);
+  assert.equal(image.metadata.maskQuality.status, "REVIEW");
+  assert.ok(image.metadata.maskQuality.reasons.some((r) => r.includes("Bilddetail")));
+  assert.ok(extractFeatures({ venation: image.normalized }).blocks.venation.every((v) => v === 0));
+  // Real internal line detail must survive the safe-interior mask.
+  const detailed = fixture();
+  for (let y = 170; y < 190; y++) for (let x = 160; x < 200; x++)
+    for (let c = 0; c < 3; c++) detailed.data[(y * detailed.width + x) * 4 + c] = 30;
+  const processed = preprocess(detailed, options);
+  assert.ok(processed.metadata.captureQuality.sharpnessInWing > 0);
+  assert.ok(Math.hypot(...extractFeatures({ venation: processed.normalized }).blocks.venation) > 0);
 });

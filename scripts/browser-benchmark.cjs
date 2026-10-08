@@ -56,7 +56,7 @@ const fs = require("node:fs");
     "test-data/benchmark.json",
     JSON.stringify(
       {
-        version: "wing-normalizer-0.2",
+        version: "wing-normalizer-0.3",
         kind: "development smoke benchmark; no segmentation ground truth; timings hardware dependent",
         results: report,
       },

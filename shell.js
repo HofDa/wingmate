@@ -6,6 +6,15 @@ import { placed, scheme } from "./classifier/landmarks.js";
 
 const $ = (s) => document.querySelector(s);
 const VIEWS = ["exemplar", "ergebnis", "referenzen", "einstellungen"];
+for (const choose of document.querySelectorAll(".slot-actions .button[for]")) {
+  choose.tabIndex = 0;
+  choose.setAttribute("role", "button");
+  choose.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    document.getElementById(choose.htmlFor).click();
+  });
+}
 const bar = $("#nextBar"),
   form = $("#refForm"),
   hint = $("#nextHint"),
@@ -65,8 +74,15 @@ window.addEventListener("wing-preprocessing-change", ({ detail }) => {
   $("#clearImagesBtn").hidden = !items.length;
   $("#qcPanel").hidden = !items.length;
   $("#qcEmpty").hidden = !!items.length;
+  $("#uploadPanel").classList.toggle("has-images", !!items.length);
+  $("#h-images").textContent = items.length ? "Aufnahmen" : "Flügelbild hinzufügen";
   for (const [type, input] of [["venation", "venInput"], ["wip", "wipInput"]]) {
-    $("#" + input).closest(".dropzone").classList.toggle("has-image", !!detail.items[type]);
+    const zone = $("#" + input).closest(".dropzone");
+    const loaded = !!detail.items[type];
+    zone.classList.toggle("has-image", loaded);
+    const choose = zone.parentElement.querySelector(".slot-actions .button");
+    choose.classList.toggle("ghost", loaded || type === "wip");
+    choose.textContent = loaded ? "Bild ersetzen" : "Foto wählen";
   }
   if (detail.items.wip) $("#wipUpload").open = true;
 
@@ -107,6 +123,7 @@ window.addEventListener("wing-reference-added", ({ detail }) => {
 window.addEventListener("wing-references-change", ({ detail }) => {
   $("#refTabCount").textContent = detail.count ? String(detail.count) : "";
   $("#referenceEmpty").hidden = detail.count > 0;
+  $("#refCount").hidden = !detail.count;
   $("#exportBtn").disabled = $("#clearRefsBtn").disabled = !detail.count;
 });
 // app.js registers its classify handler first (module order); then switch view.
@@ -116,6 +133,7 @@ classifyBtn.addEventListener("click", () => show("ergebnis"));
 $("#refTabCount").textContent = window.wingClassifier?.state.references.length || "";
 const referenceCount = window.wingClassifier?.state.references.length || 0;
 $("#referenceEmpty").hidden = referenceCount > 0;
+$("#refCount").hidden = !referenceCount;
 $("#exportBtn").disabled = $("#clearRefsBtn").disabled = !referenceCount;
 // Reserve the actual height, including the expanded reference form and
 // wrapped mobile instructions, so the last control remains reachable.

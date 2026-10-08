@@ -1,10 +1,10 @@
 import { segment } from "./segmentation.js";
 import { quality } from "./quality.js";
 import { orientation } from "./orientation.js";
-import { normalization, resample } from "./normalization.js";
+import { normalization, resample, interiorMask } from "./normalization.js";
 import { inverse } from "./matrix.js";
 import { flatFieldCorrect, driftCheck, sharpness, clippedFraction } from "./rig.js";
-export const VERSION = "wing-normalizer-0.2";
+export const VERSION = "wing-normalizer-0.3";
 export const DEFAULTS = Object.freeze({
   analysisMax: 640,
   width: 1024,
@@ -87,10 +87,11 @@ export function preprocess(image, options = {}, { keepSource = false } = {}) {
   // lost information, whereas flat-field gain may legitimately reach 255.
   const captureQuality = {
     clippedFractionInWing: clippedFraction(raw, mask),
-    sharpnessInWing: sharpness(small, mask),
-    sharpnessMeaning: "Laplacian variance at analysis resolution; comparable only within one rig",
+    sharpnessInWing: sharpness(small, interiorMask(mask, w, h)),
+    sharpnessMeaning: "Laplacian variance in eroded wing interior at analysis resolution; not proof of vein detail",
   };
   if (captureQuality.clippedFractionInWing > 0.005) review("Überbelichtung im Flügel (Sensor gesättigt)");
+  if (captureQuality.sharpnessInWing < 1e-6) review("Kein messbares Bilddetail im Flügelinneren – Adern/WIP prüfen");
   if (rig && !useModel) review("Licht/Hintergrund weicht vom Rig-Profil ab");
   const metricScale = options.originalMetricScale ?? null,
     umpp = metricScale?.micrometersPerPixel,

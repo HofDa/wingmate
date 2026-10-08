@@ -399,8 +399,11 @@ function meter(label, value, bar, warn) {
 // Placement guide with the normalized 2:1 aspect: base left, tip right, anterior up.
 function drawGuide() {
   const c = ui.overlay;
-  c.width = ui.video.videoWidth;
-  c.height = ui.video.videoHeight;
+  // Resizing a canvas reallocates it (≈ 33 MB at 4K): only when the stream changes.
+  if (c.width !== ui.video.videoWidth || c.height !== ui.video.videoHeight) {
+    c.width = ui.video.videoWidth;
+    c.height = ui.video.videoHeight;
+  }
   const ctx = c.getContext("2d"),
     gw = c.width * 0.8,
     gh = Math.min(c.height * 0.8, gw / 2),

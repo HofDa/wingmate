@@ -1,4 +1,17 @@
 import { apply, inverse } from "./matrix.js";
+// Keep signal measurements away from boundaries and their interpolation halo.
+export function interiorMask(mask, width, height, radius = 2) {
+  const out = new Uint8Array(mask.length);
+  for (let y = radius; y < height - radius; y++)
+    for (let x = radius; x < width - radius; x++) {
+      let inside = true;
+      for (let dy = -radius; dy <= radius && inside; dy++)
+        for (let dx = -radius; dx <= radius; dx++)
+          if (!mask[(y + dy) * width + x + dx]) { inside = false; break; }
+      if (inside) out[y * width + x] = 1;
+    }
+  return out;
+}
 export function normalization(mask, w, h, o, params = {}) {
   const width = params.width ?? 1024,
     height = params.height ?? 512,
@@ -49,6 +62,8 @@ export function resample(
 ) {
   const out = new Uint8ClampedArray(width * height * 4),
     outMask = new Uint8Array(width * height),
+    signalMask = new Uint8Array(width * height),
+    interior = interiorMask(mask, maskWidth, maskHeight),
     inv = inverse(matrix),
     { width: w, height: h, data } = image;
   for (let y = 0; y < height; y++)
@@ -70,6 +85,7 @@ export function resample(
       )
         continue;
       outMask[p] = 1;
+      signalMask[p] = interior[my * maskWidth + mx];
       const x0 = Math.floor(q.x),
         y0 = Math.floor(q.y),
         fx = q.x - x0,
@@ -88,5 +104,5 @@ export function resample(
         out[p * 4 + ch] = v;
       }
     }
-  return { data: out, mask: outMask, width, height };
+  return { data: out, mask: outMask, signalMask, width, height };
 }

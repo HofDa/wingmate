@@ -75,7 +75,13 @@ test("training evaluates all methods with the same folds and picks the best", ()
   assert.equal(model.evaluation.methods[model.primary].balancedAccuracy, best);
   const cal = model.evaluation.ldaCalibration;
   assert.ok(Math.abs(cal.meanTopProbability - cal.balancedAccuracy) < 0.2, JSON.stringify(cal));
-  assert.ok(model.evaluation.conformal.coverage > 0.75);
+  // Twelve animals per taxon cannot provide nine independent calibration
+  // animals in each development fold with the 20% holdout policy.
+  assert.equal(model.evaluation.conformal.coverage, null);
+  assert.equal(model.evaluation.conformal.validQueries, 0);
+  assert.equal(model.calibration.protocol, "split-specimen-max");
+  assert.equal(new Set(model.calibration.groups).size, model.calibration.groups.length);
+  assert.ok(model.calibration.groups.every((g) => !model.groups.includes(g)));
   assert.equal(model.taxa["Bombus terrestris"].specimens, 12);
   assert.equal(model.taxa["Bombus terrestris"].status, "ready");
 });
@@ -162,4 +168,40 @@ test("reference fingerprint and readiness", () => {
     warnings: ["2 Flügel ohne Geschlecht"],
     status: "insufficient",
   });
+});
+
+
+test("saved classifier settings and model contracts are enforced", () => {
+  const query = queries[0].features;
+  const changed = { ...model, classifier: { ...model.classifier, alpha: 1 } };
+  assert.deepEqual(loadModel(changed).classify(query).scores, {});
+  assert.throws(() => loadModel(model).classify({ ...query, version: "future" }), /Merkmalsversion/);
+  assert.throws(() => loadModel(model).classify(query, "future"), /Vorverarbeitungsversion/);
+  const invalid = { ...query, blocks: { landmarks: query.blocks.landmarks.map((v, i) => i ? v : NaN) } };
+  assert.throws(() => loadModel(model).classify(invalid), /ungültige Werte/);
+  const overlap = { ...model, calibration: { ...model.calibration, groups: model.calibration.groups.map((g, i) => i ? g : model.groups[0]) } };
+  assert.throws(() => loadModel(overlap), /Kalibrierungsdaten/);
+  assert.ok(Object.keys(model.reservoir.params).includes("seed"));
+});
+
+test("frozen standardizer is fitted only to training animals", () => {
+  const rnd = mulberry32(3);
+  const synthetic = Array.from({ length: 30 }, (_, i) => ({
+    id: String(i), group: String(i), species: i < 15 ? "A" : "B",
+    features: { version: "test", blocks: { shape: [i * i, rnd()] } },
+  }));
+  const m = trainModel(synthetic, { ...settings, mode: "none" });
+  const train = synthetic.filter((r) => m.groups.includes(r.group));
+  const expected = train.reduce((sum, r) => sum + r.features.blocks.shape[0], 0) / train.length;
+  assert.ok(Math.abs(m.standardizer.mean[0] - expected) < 1e-4);
+  assert.notEqual(m.standardizer.mean[0], synthetic.reduce((sum, r) => sum + r.features.blocks.shape[0], 0) / synthetic.length);
+  assert.throws(() => trainModel(synthetic.map((r, i) => ({ ...r, group: i ? r.group : null })), settings), /Exemplar-ID/);
+  const original = referenceFingerprint(synthetic);
+  assert.notEqual(referenceFingerprint(synthetic.map((r, i) => i ? r : { ...r, species: "B" })), original);
+});
+
+test("missing diagnostic modalities require an explicit input contract", () => {
+  const partial = refs.map((r, i) => ({ ...r, features: { ...r.features, blocks: { ...r.features.blocks, ...(i ? { wip: [i, 2] } : {}) } } }));
+  assert.throws(() => trainModel(partial, settings), /Eingabemodus/);
+  assert.throws(() => trainModel(partial, { ...settings, blocks: ["wip"] }), /wip/);
 });

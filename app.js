@@ -6,14 +6,11 @@ import { VERSION as PREPROCESSING_VERSION } from "./imaging/pipeline.js";
 import { extractFeatures, FEATURE_VERSION } from "./classifier/features.js";
 import {
   commonBlocks,
-  fitStandardizer,
-  makeEmbedder,
   graphReservoir,
   mulberry32,
   RESERVOIR_DEFAULTS,
 } from "./classifier/embedding.js";
 import {
-  similarityContext,
   querySimilarities,
   rwrScores,
   rwrTransitions,
@@ -22,14 +19,13 @@ import {
   entropyBits,
   calibrate,
   conformalPredict,
-  leaveOneOut,
-  summarize,
   CLASSIFIER_DEFAULTS,
 } from "./classifier/classify.js";
-import { pca2, fitShapeLDA, fitCalibratedShapeLDA } from "./classifier/morphometrics.js";
-import { landmarkBlock, alignLandmarkBlocks } from "./classifier/landmarks.js";
+import { pca2, fitCalibratedShapeLDA } from "./classifier/morphometrics.js";
+import { landmarkBlock } from "./classifier/landmarks.js";
 import { createWalkView, traceWalk } from "./walk.js";
 import { createTrainingView } from "./training.js";
+import { fitReferenceSpace, evaluateReferences } from "./classifier/model.js";
 
 const $ = (s) => document.querySelector(s);
 const STORAGE_KEY = "wingmate-references-v2",
@@ -58,6 +54,7 @@ function reservoirSettings() {
   };
   return {
     mode: $("#reservoirMode").value,
+    blocks: { venation: ["shape", "venation"], paired: ["shape", "venation", "wip"], landmarks: ["landmarks"] }[$("#featureMode").value],
     params: {
       kenyonCells: int("#reservoirSize", 128, 8192, RESERVOIR_DEFAULTS.kenyonCells),
       fanIn: int("#fanIn", 1, 30, RESERVOIR_DEFAULTS.fanIn),
@@ -126,19 +123,28 @@ function refreshReferences() {
   $("#refCount").textContent = state.references.length
     ? `${state.references.length} Referenzen · ${specimens} Exemplare · ${taxa.length} Taxa · Details unter „Modell trainieren“`
     : "Noch keine Referenzen. Ein sicher bestimmtes Exemplar unter „Exemplar“ freigeben und „Als Referenz …“ wählen.";
+  const outdated = state.references.filter((r) => !usable(r)).length;
+  if (outdated) $("#refCount").textContent += ` · ${outdated} Referenzen haben ältere Merkmale/Vorverarbeitung und müssen aus den Originalen neu verarbeitet werden.`;
   drawEmbedding();
 }
 function addReference() {
   const species = $("#speciesInput").value.trim();
   if (!species) return message("#refFormStatus", "Bitte Taxon/Art angeben.", "error");
   if (!state.query) return message("#refFormStatus", "Zuerst ein Exemplar in der QC akzeptieren.", "error");
+  const specimenId = $("#specimenInput").value.trim();
+  if (!specimenId) return message("#refFormStatus", "Bitte stabile Exemplar-ID angeben (dieselbe für alle Flügel eines Tieres).", "error");
+  if (state.references.some((r) => r.specimenId === specimenId && r.species !== species))
+    return message("#refFormStatus", "Diese Exemplar-ID hat bereits ein anderes Taxon.", "error");
+  const hashes = Object.values(state.query.preprocessing?.images ?? {}).map((i) => i.sourceSha256).filter(Boolean);
+  if (state.references.some((r) => r.specimenId !== specimenId && Object.values(r.preprocessing?.images ?? {}).some((i) => hashes.includes(i.sourceSha256))))
+    return message("#refFormStatus", "Dieses Bild ist bereits unter einer anderen Exemplar-ID gespeichert. Identität prüfen.", "error");
   const archive = state.query.specimenArchiveId;
   if (archive && state.references.some((r) => r.specimenArchiveId === archive))
     return message("#refFormStatus", "Dieses akzeptierte Exemplar ist bereits eine Referenz.", "error");
   state.references.push({
     id: crypto.randomUUID(),
     species,
-    specimenId: $("#specimenInput").value.trim() || null,
+    specimenId,
     sex: $("#sexInput").value || null,
     series: $("#seriesInput").value.trim() || null,
     specimenArchiveId: archive,
@@ -203,30 +209,11 @@ async function importRefs(file) {
 // ---------- embedding + classification ----------
 // Build the comparison space from the references only (standardisation is
 // fitted on references; the query never influences it).
-function space(refs, extra = [], { mode, params } = reservoirSettings()) {
-  const all = [...refs.map((r) => r.features), ...extra],
-    blocks = commonBlocks(all);
-  if (!blocks.length)
-    throw Error(
-      "Dieses Exemplar und die Referenzen haben keine gemeinsamen Merkmale. Beispiel: Die Referenzen haben nur Landmarken – dann für dieses Exemplar alle Landmarken setzen und neu freigeben.",
-    );
-  // Landmarks enter as Procrustes-aligned coordinates (label-free GPA over
-  // references and query), not as raw pixel positions.
-  const aligned = blocks.includes("landmarks") ? alignLandmarkBlocks(all) : null,
-    prepare = (f) => (aligned?.has(f) ? { ...f, blocks: { ...f.blocks, landmarks: aligned.get(f) } } : f);
-  const standardizer = fitStandardizer(refs.map((r) => prepare(r.features)), blocks),
-    embed = makeEmbedder(mode, standardizer.dim, params, state.graph),
-    toEmbedding = (features) => embed(standardizer.transform(prepare(features))),
-    embeddings = refs.map((r) => toEmbedding(r.features));
-  return {
-    blocks,
-    mode,
-    toEmbedding,
-    embeddings,
-    ctx: similarityContext(embeddings),
-    labels: refs.map((r) => r.species),
-    groups: refs.map(groupOf),
-  };
+function space(refs, extra = [], settings = reservoirSettings()) {
+  const result = fitReferenceSpace(refs.map((r) => ({ ...r, group: groupOf(r) })), { ...settings, graph: state.graph });
+  // Validate query compatibility without changing the fitted representation.
+  extra.forEach((f) => result.toEmbedding(f));
+  return { ...result, mode: settings.mode };
 }
 // Identification with the active frozen model (training mode).
 function classifyWithModel() {
@@ -234,9 +221,9 @@ function classifyWithModel() {
     m = runtime.model;
   try {
     footer("Klassifiziere mit eingefrorenem Modell …");
-    const r = runtime.classify(state.query.features);
+    const r = runtime.classify(state.query.features, state.query.preprocessing?.version);
     renderResults({ scores: r.scores, knn: r.knn, conformal: r.conformal, best: r.best, n: runtime.labels.length + 1, blocks: m.blocks });
-    showWalk(runtime.ctx, r.qs, runtime.labels);
+    showWalk(runtime.ctx, r.qs, runtime.labels, m.classifier);
     const box = ldaBox();
     if (r.lda) renderLDAProbabilities(box, r.lda.probabilities, r.lda.model, Math.min(...Object.values(m.taxa).map((t) => t.specimens)));
     else if (m.lda) box.append(note("mini", "Procrustes + LDA: Für dieses Exemplar fehlen vollständige Landmarken desselben Schemas."));
@@ -251,7 +238,7 @@ function classifyWithModel() {
       "#classifyStatus",
       `Modell „${m.name}“ (${m.createdAt.slice(0, 10)}). Empfehlung nach Kreuzvalidierung: ${primary.name} → ` +
         (top ? `${top[0]} (${(100 * top[1]).toFixed(0)} %)` : "nicht verfügbar für diese Aufnahme") +
-        `; im Training ${(100 * primary.balancedAccuracy).toFixed(1)} % balanciert richtig.` +
+        `; in der Entwicklungs-Kreuzvalidierung ${(100 * primary.balancedAccuracy).toFixed(1)} % balanciert richtig (kein unabhängiger Abschlusstest).` +
         (inTraining ? " Achtung: Dieses Exemplar war Teil des Trainings – das Ergebnis ist zu optimistisch." : ""),
       inTraining ? "warn" : "ok",
     );
@@ -265,7 +252,8 @@ function classify() {
   if (!state.query) return message("#classifyStatus", "Zuerst ein Exemplar in der QC akzeptieren.", "error");
   if (state.model) return classifyWithModel();
   const self = state.query.specimenArchiveId,
-    refs = state.references.filter((r) => usable(r) && (!self || r.specimenArchiveId !== self));
+    specimen = state.references.find((r) => self && r.specimenArchiveId === self)?.specimenId || $("#specimenInput").value.trim(),
+    refs = state.references.filter((r) => usable(r) && (!self || r.specimenArchiveId !== self) && (!specimen || r.specimenId !== specimen));
   const taxa = new Set(refs.map((r) => r.species));
   if (refs.length < 2 || taxa.size < 2)
     return message("#classifyStatus", "Mindestens zwei Taxa mit Referenzen nötig.", "error");
@@ -276,7 +264,7 @@ function classify() {
       qs = querySimilarities(s.ctx, q),
       scores = rwrScores(s.ctx, s.labels, qs),
       knn = knnScores(s.ctx, s.labels, qs),
-      conformal = conformalPredict(qs, s.labels, calibrate(s.ctx, s.labels, s.groups), undefined),
+      conformal = conformalPredict(qs, s.labels, calibrate(s.ctx, s.labels, s.groups), undefined, { referenceGroups: s.groups }),
       best = Math.max(...qs);
     renderResults({ scores, knn, conformal, best, n: refs.length + 1, blocks: s.blocks });
     showWalk(s.ctx, qs, s.labels);
@@ -297,9 +285,9 @@ function classify() {
 }
 // Same transition rows as rwrScores; the sampled trajectory is seeded so a
 // given query always shows the same illustrative walk.
-function showWalk(ctx, qs, species) {
-  const { alpha, steps } = CLASSIFIER_DEFAULTS,
-    { P, query } = rwrTransitions(ctx, qs),
+function showWalk(ctx, qs, species, settings = CLASSIFIER_DEFAULTS) {
+  const { alpha, steps } = settings,
+    { P, query } = rwrTransitions(ctx, qs, undefined, settings),
     labels = [...species.map((t, i) => `${t} · #${i + 1}`), "Dein Exemplar"];
   walkView.show({
     P,
@@ -325,12 +313,10 @@ function clearResults() {
 // Procrustes + LDA on landmarks: the geometric-morphometrics standard. Needs
 // a landmark block of one scheme on every reference (and the query).
 function landmarkRefs(refs, query = null) {
-  const all = [...refs.map((r) => r.features), ...(query ? [query] : [])];
-  if (!commonBlocks(all).includes("landmarks")) return null;
-  const labels = refs.map((r) => r.species);
-  if (new Set(labels).size < 2) return null;
-  const aligned = alignLandmarkBlocks(all);
-  return { X: refs.map((r) => aligned.get(r.features)), q: query ? aligned.get(query) : null, labels, groups: refs.map(groupOf) };
+  if (!commonBlocks([...refs.map((r) => r.features), ...(query ? [query] : [])]).includes("landmarks")) return null;
+  if (new Set(refs.map((r) => r.species)).size < 2) return null;
+  const fitted = fitReferenceSpace(refs.map((r) => ({ ...r, group: groupOf(r) })), { mode: "none", blocks: ["landmarks"] });
+  return { X: fitted.X, q: query ? fitted.landmarkVector(query) : null, labels: fitted.labels, groups: fitted.groups, configs: fitted.configs };
 }
 function ldaBox() {
   let box = $("#ldaResult");
@@ -360,7 +346,7 @@ function renderLDA(refs) {
     );
     return;
   }
-  const model = fitCalibratedShapeLDA(data.X, data.labels, data.groups),
+  const model = fitCalibratedShapeLDA(data.X, data.labels, data.groups, { landmarkConfigs: data.configs }),
     specimens = {};
   data.groups.forEach((g, i) => (specimens[data.labels[i]] ??= new Set()).add(g));
   renderLDAProbabilities(box, model.predictProba(data.q), model, Math.min(...Object.values(specimens).map((v) => v.size)));
@@ -399,7 +385,7 @@ function renderLDAProbabilities(box, probabilities, model, fewest) {
     box.append(
       note(
         "status",
-        `Nur ${fewest} Exemplar(e) im kleinsten Taxon: Auf realen Bombus-Daten liegt die Trefferquote bei 3 Exemplaren/Art um 65 %, bei 10 um 80 % (test-data/landmark-benchmark.json).`,
+        `Nur ${fewest} unabhängige Exemplar(e) im kleinsten Trainingstaxon. Die Wahrscheinlichkeiten sind bei so wenigen Tieren sehr unsicher; mehr unabhängige, repräsentative Referenzen ergänzen.`,
         "warn",
       ),
     );
@@ -439,10 +425,9 @@ function renderResults({ scores, knn, conformal, best, n, blocks }) {
   if (!conformal.openSetValid) {
     pill.textContent = "offene Menge: nicht kalibriert";
     pill.dataset.kind = "warn";
-    set.textContent =
-      `Vorhersage-Set (${pct} %): {${conformal.set.join(", ")}}. Nicht aussagekräftig: ` +
-      `${conformal.uncalibrated.join(", ")} ${conformal.uncalibrated.length > 1 ? "haben" : "hat"} weniger als ${Math.ceil(1 / conformal.epsilon) - 1} ` +
-      "Referenzexemplare, daher kann kein Taxon abgelehnt und kein unbekanntes Tier erkannt werden.";
+    set.textContent = conformal.protocol !== "split-specimen-max"
+      ? "Live-Vergleich: Ähnlichkeiten sind explorativ. Für eine kalibrierte Vorhersagemenge ein Modell mit unabhängigen Kalibrierungsexemplaren trainieren."
+      : `Kalibrierung unzureichend: ${conformal.uncalibrated.join(", ")} braucht mindestens ${Math.ceil(1 / conformal.epsilon) - 1} unabhängige Kalibrierungsexemplare pro Taxon. Kein belastbarer Ausschluss unbekannter Arten.`;
   } else if (conformal.unknown) {
     pill.textContent = "offene Menge: keiner Art ähnlich";
     pill.dataset.kind = "warn";
@@ -450,7 +435,7 @@ function renderResults({ scores, knn, conformal, best, n, blocks }) {
   } else {
     pill.textContent = conformal.set.length === 1 ? "offene Menge: eindeutig" : "offene Menge: mehrdeutig";
     pill.dataset.kind = conformal.set.length === 1 ? "ok" : "warn";
-    set.textContent = `Vorhersage-Set (${pct} %): {${conformal.set.join(", ")}} — enthält das wahre Taxon bei austauschbaren Daten in ≈${pct} % der Fälle.`;
+    set.textContent = `Vorhersagemenge: {${conformal.set.join(", ")}}. Zielabdeckung ${pct} % bei vergleichbaren neuen Exemplaren; unabhängig kalibriert. Dies ist keine Wahrscheinlichkeit für die einzelne Art und keine Garantie, unbekannte Arten zu erkennen.`;
   }
   set.textContent += ` Merkmale: ${blocks.join(" + ")}.`;
 }
@@ -464,24 +449,13 @@ function validate() {
   if (new Set(refs.map((r) => r.species)).size < 2 || refs.length < 4)
     return message("#refStatus", "Validierung braucht ≥ 4 Referenzen aus ≥ 2 Taxa.", "error");
   try {
-    const current = space(refs),
-      rows = [
-        [`RWR · ${current.mode}`, leaveOneOut(current.ctx, current.labels, current.groups, "rwr")],
-        [`kNN · ${current.mode}`, leaveOneOut(current.ctx, current.labels, current.groups, "knn")],
-      ];
-    if (current.mode !== "none") {
-      const control = space(refs, [], { mode: "none", params: {} });
-      rows.push(["RWR · kein Reservoir (Kontrolle)", leaveOneOut(control.ctx, control.labels, control.groups, "rwr")]);
-    }
-    const lm = landmarkRefs(refs);
-    if (lm) {
-      const groups = refs.map(groupOf),
-        predictions = lm.X.map((x, i) => {
-          const train = lm.X.map((_, j) => j).filter((j) => groups[j] !== groups[i]);
-          if (!train.some((j) => lm.labels[j] === lm.labels[i]) || new Set(train.map((j) => lm.labels[j])).size < 2) return null;
-          return fitShapeLDA(train.map((j) => lm.X[j]), train.map((j) => lm.labels[j])).predict(x);
-        });
-      rows.unshift(["Procrustes + LDA (Landmarken)", summarize(lm.labels, predictions)]);
+    const records = refs.map((r) => ({ ...r, group: r.specimenId }));
+    const settings = { ...reservoirSettings(), graph: state.graph };
+    const evaluation = evaluateReferences(records, settings);
+    const rows = Object.values(evaluation.methods).map((r) => [r.name, r]);
+    if (settings.mode !== "none") {
+      const control = evaluateReferences(records, { ...settings, mode: "none" });
+      rows.push(["RWR · kein Reservoir (Kontrolle)", control.methods.rwr]);
     }
     const table = document.createElement("table"),
       head = table.createTHead().insertRow();
@@ -500,7 +474,7 @@ function validate() {
     const note = document.createElement("p");
     note.className = "mini";
     note.textContent =
-      "Gruppiertes Leave-one-out: Jedes Exemplar (Exemplar-ID bzw. QC-Archiv-ID) wird samt allen seiner Flügel entfernt. Taxa mit nur einem Exemplar sind nicht auswertbar. Kleine Referenzsätze ergeben sehr unsichere Werte.";
+      "Gruppierte Kreuzvalidierung: Alle Flügel eines Tieres bleiben zusammen. Ausrichtung, Skalierung und Kalibrierung werden ausschließlich auf den Trainingsgruppen angepasst. Entwicklungswerte ersetzen keinen unabhängigen Abschlusstest.";
     out.append(table, note);
     message("#refStatus", "Validierung abgeschlossen.", "ok");
   } catch (e) {
@@ -692,7 +666,7 @@ training = createTrainingView($("#trainingCard"), {
     state.references.filter(usable).map((r) => ({
       id: r.id,
       species: r.species,
-      group: groupOf(r),
+      group: r.specimenId,
       sex: r.sex ?? null,
       series: r.series ?? null,
       features: r.features,

@@ -331,6 +331,11 @@ export function fitCalibratedShapeLDA(X, labels, groups, options = {}) {
       const keep = X.map((_, j) => j).filter((j) => groups[j] !== groups[i]),
         taxa = new Set(keep.map((j) => labels[j]));
       if (!taxa.has(labels[i]) || taxa.size < 2 || taxa.size !== new Set(labels).size) return null;
+      if (options.landmarkConfigs) {
+        const alignment = gpa(keep.map((j) => options.landmarkConfigs[j]));
+        const query = alignToMean(options.landmarkConfigs[i], alignment.mean).flat();
+        return fitShapeLDA(alignment.flat, keep.map((j) => labels[j]), options).scores(query);
+      }
       return fitShapeLDA(keep.map((j) => X[j]), keep.map((j) => labels[j]), options).scores(x);
     }),
     usable = loo.filter(Boolean).length,

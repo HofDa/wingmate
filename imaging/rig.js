@@ -117,18 +117,21 @@ function blur(field, radius) {
   return { ...field, data: src };
 }
 export function illuminationField(image, { maxSide = FIELD_MAX_SIDE, radius = 2 } = {}) {
+  // Reference level per channel = 90th percentile, not the median: in a rig
+  // the camera often sees a dark frame around the light window (e.g. the
+  // slide drawer), which can make up half the image.
   const field = blur(areaAverage(image, maxSide), radius),
-    medians = [0, 1, 2].map((c) => {
+    levels = [0, 1, 2].map((c) => {
       const v = [];
       for (let i = c; i < field.data.length; i += 3) v.push(field.data[i]);
       v.sort((a, b) => a - b);
-      return v[Math.floor(v.length / 2)];
+      return v[Math.floor(v.length * 0.9)];
     });
-  if (medians.some((m) => m < 8))
+  if (levels.some((m) => m < 12))
     throw Error("Referenzfläche zu dunkel für eine Flat-Field-Korrektur (für WIP eine Graukarte verwenden)");
   // One common target for all channels: the corrected reference becomes neutral grey.
-  const target = medians.reduce((a, b) => a + b, 0) / 3;
-  return { ...field, medians, target };
+  const target = levels.reduce((a, b) => a + b, 0) / 3;
+  return { ...field, levels, target };
 }
 // Bilinear lookup at the source pixel centre (x, y) of a srcW × srcH image.
 function sampleField(field, x, y, srcW, srcH, c) {

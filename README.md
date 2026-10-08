@@ -2,6 +2,10 @@
 
 Lokaler Forschungsprototyp für Wildbienen-ID aus **Wing Interference Patterns (WIP)** und **Flügeladerung**.
 
+
+**Benutzerhandbuch:** [docs/Benutzerhandbuch.md](docs/Benutzerhandbuch.md) – Bedienung Schritt für Schritt, Rig, Landmarken, Training, Fehlerbehebung.
+**Aufnahme-Rig zum Drucken:** [rig/README.md](rig/README.md) – parametrisches OpenSCAD-Modell, STL, Teileliste, Montage.
+
 ## Pipeline
 
 1. Zwei Bilder desselben Vorderflügels (ideal: Reflexionslicht für WIP + Durchlicht für Aderung)
@@ -165,14 +169,14 @@ eigenes Schema nötig; Blöcke verschiedener Schemata werden nie verglichen.
 **Klassifikation**: Vollständige Landmarken eines *orientierungsbestätigten* Bildes werden zum Block
 `landmarks` (Standardansicht, damit linke und rechte Flügel nach dem Spiegeln vergleichbar sind –
 Procrustes entfernt keine Spiegelung). Haben alle Referenzen Landmarken desselben Schemas, zeigt die
-Ausgabe zusätzlich **Procrustes + LDA**: GPA (ohne Labels, inkl. Abfrage) → Hauptkomponenten
+Ausgabe zusätzlich **Procrustes + LDA**: GPA (nur auf Trainingsreferenzen; Abfrage an feste Mittelform angepasst) → Hauptkomponenten
 (bei wenigen Exemplaren höchstens (n − Taxa)/2) → LDA mit Ledoit–Wolf-Schrumpfung →
 Wahrscheinlichkeiten per gruppiertem Leave-one-out **temperaturkalibriert**. Die Validierung listet
 die LDA-Zeile zuerst. LDA wählt immer ein bekanntes Taxon; für Unbekannte gilt das konforme Set.
 
-Warum kalibrieren: Unkalibriert nennt LDA auf den *Bombus*-Daten mit 3–10 Exemplaren/Art im Mittel
-95–98 % Sicherheit, liegt aber nur zu 67–83 % richtig. Kalibriert (3 / 5 / 10 Exemplare): angegeben
-58 / 67 / 77 %, tatsächlich 66 / 72 / 83 % richtig; Brier-Score jeweils besser.
+Die Temperatur wird nur aus den Trainingsgruppen geschätzt. Auch in dieser inneren
+Validierung wird die Procrustes-Ausrichtung neu angepasst. Entwicklungswerte ersetzen
+keinen Test an unabhängigen Tieren oder eine Prüfung der Erkennung unbekannter Arten.
 
 ## Training (Modell einfrieren)
 
@@ -180,19 +184,22 @@ Unter **Referenzen → Modell trainieren** (`classifier/model.js`, läuft im Wor
 
 1. **Bereitschaft** je Art: Exemplare, Flügel, Landmarken, Geschlecht, Serien; Warnung bei
    < 10 Exemplaren, nur einem Geschlecht oder nur einer Serie/Fundort.
-2. **Trainieren** passt Standardisierung, Reservoir-Einbettung, offene Menge und – wenn alle
-   Referenzen Landmarken haben – Procrustes-Mittelform, PCA, LDA und Temperaturkalibrierung einmal an.
+2. **Trainieren** reserviert je Taxon standardmäßig 20 % der unabhängigen Tiere für die
+   Kalibrierung (mindestens zwei Tiere bleiben im Training). Diese Tiere beeinflussen keine
+   Anpassung von Ausrichtung, Standardisierung, PCA oder LDA. Ein fester FlyHash lernt keine
+   Bildmerkmale. Fehlende Modalitäten erfordern eine explizite Wahl des Eingabemodus.
 3. **Bewertung** aller Verfahren mit denselben stratifizierten, nach Exemplar gruppierten
-   5 Falten; das beste (balancierte Genauigkeit) wird Standard. Haben alle Referenzen eine Serie,
+   5 Falten, mit neu angepasster Pipeline pro Trainingsfold; das beste (balancierte Genauigkeit)
+   wird Standard. Das sind Auswahlwerte, kein unabhängiger Abschlusstest. Haben alle Referenzen eine Serie,
    zusätzlich **Transfer auf ungesehene Serien** (jeweils eine Serie zurückgehalten).
-4. Das Modell wird gespeichert (IndexedDB), ist exportier-/importierbar (`wingmate-model-1`,
+4. Das Modell wird gespeichert (IndexedDB), ist exportier-/importierbar (`wingmate-model-2`,
    JSON) und bestimmt, solange aktiv, alle neuen Tiere; neue Flügel richtet es per Procrustes an
    der gespeicherten Mittelform aus. Geänderte Referenzen werden angezeigt – dann neu trainieren.
 
-Warum Serien/Geschlecht zählen (Bombus-Landmarken, *lucorum* vs. *terrestris*): Referenzen aus
-**einer** Sammlung ergaben 100 % in der Kreuzvalidierung, aber 70 % auf den anderen Sammlungen;
-nur Weibchen kosteten auf Männchen etwa 6 Punkte (92 % vs. 86 %). Die Kreuzvalidierung sagt nur
-voraus, was die Referenzen abdecken (`tests/model.test.js`).
+Serien/Geschlecht müssen die spätere Anwendung abdecken. Stabile Exemplar-IDs sind Pflicht,
+damit linke/rechte Flügel eines Tieres im selben Split bleiben. Alte Modelle benötigen neues
+Training. Bildreferenzen aus `wing-features-1` / `wing-normalizer-0.2` müssen aus den archivierten
+Originalen neu verarbeitet werden; Dateien und Archive werden nicht gelöscht.
 
 ## Echte FlyWire-Daten
 
@@ -216,11 +223,12 @@ Falls die CSV andere Spaltennamen verwendet, diese per `--source-col`, `--target
 
 Danach `flywire-subgraph.json` im UI unter **FlyWire-Subgraph importieren** laden.
 
-## Step 2 · Klassifikation (wing-features-1)
+## Step 2 · Klassifikation (wing-features-2)
 
 Code in `classifier/` (reine ES-Module, in Node getestet), UI in `app.js`, Markov-Ansicht in `walk.js`.
 
-1. **Merkmale** (`features.js`) auf dem normalisierten 1024 × 512-Bild, nur Maskenpixel:
+1. **Merkmale** (`features.js`) auf dem auf 256 × 128 verkleinerten Normalbild, mit separater
+   Innenmaske gegen interpolierte Konturränder. Gleichförmige Membranen erzeugen keine Adermerkmale:
    Umrissprofil (66), Venation als HOG-artige Orientierungshistogramme + relative Dunkelheit
    je 8 × 4-Zelle ohne Konturrand (288), WIP als CIELAB je Zelle + chroma-gewichtetes
    Farbtonhistogramm (112). Keine Farbkorrektur; Aufnahmebedingungen müssen fix sein.
@@ -236,35 +244,29 @@ Code in `classifier/` (reine ES-Module, in Node getestet), UI in `app.js`, Marko
    Die Masse je Taxon wird durch dessen Referenzzahl geteilt, sonst gewinnt das häufigste
    Taxon. `rwrTransitions` liefert dieselbe Übergangsmatrix an die Markov-Ansicht; ein Test
    prüft, dass `traceWalk` exakt die bewertete Verteilung reproduziert.
-5. **Open-set** über label-bedingte konforme Vorhersage (kNN-Nichtkonformität, Jackknife-
-   Kalibrierung pro Exemplar). Leeres Vorhersage-Set = keinem Referenztaxon ähnlich. Bei
-   ε = 0,1 braucht jedes Taxon ≥ 9 Referenzexemplare; darunter meldet die UI „nicht
-   kalibriert“ statt einer Scheinsicherheit.
-6. **Validierung** im UI: gruppiertes Leave-one-out (Exemplar-ID; linke/rechte Flügel eines
-   Tieres gemeinsam), aktueller Modus gegen kNN und „kein Reservoir“.
+5. **Open-set** im eingefrorenen Modell: label-bedingte Split-Kalibrierung gegen getrennte
+   Tiere. Mehrere Flügel eines Kalibrierungstieres ergeben nur einen (maximalen) Score; auch die
+   Nachbarschaft zählt Tiere, nicht doppelte Flügel. Bei ε = 0,1 sind mindestens neun unabhängige
+   **Kalibrierungstiere je Taxon** für die nötige p-Wert-Auflösung erforderlich. Darunter meldet
+   die UI unzureichende Kalibrierung. Live-Jackknife bleibt ausdrücklich explorativ und darf keine
+   kalibrierte Abdeckung oder belastbare Erkennung unbekannter Arten behaupten.
+6. **Validierung** im UI: gruppierte Kreuzvalidierung mit vollständiger Anpassung innerhalb der
+   Trainingsgruppen, aktueller Modus gegen kNN und „kein Reservoir“. Bilderpaare erfordern eine
+   Bestätigung desselben Flügels und der inneren Korrespondenz. QC-Hinweise benötigen eine
+   dokumentierte Freigabebegründung; ein plausibler Umriss allein belegt keine brauchbare Aderung.
 
 ### Benchmark auf realen Daten
 
-`node scripts/landmark-benchmark.js --out test-data/landmark-benchmark.json` nutzt die
-814 unveränderten Landmarkdatensätze (423 Exemplare, 3 *Bombus*-Arten, stark unbalanciert:
-662/124/28) — prüft die **Klassifikationsstufe**, nicht die Bildmerkmale. Gruppiertes LOO:
+`node scripts/landmark-benchmark.js --out test-data/landmark-benchmark.json` nutzt
+814 Landmarkdatensätze (423 Exemplare, 3 *Bombus*-Arten). Version 2 prüft die
+**Klassifikationsstufe** mit identischen fünf gruppierten Folds, getrennter Tier-Kalibrierung und
+Procrustes/Skalierung/PCA/LDA ausschließlich im Trainingsfold. Die innere Temperaturkalibrierung
+hält ebenfalls ganze Tiere zurück und passt die Ausrichtung neu an.
 
-| Verfahren | Genauigkeit | balanciert |
-|---|---|---|
-| Procrustes + LDA (Standard der geometrischen Morphometrie, Ledoit–Wolf) | 96,2 % | 92,6 % |
-| Procrustes + PCA + LDA (App-Standard) | 96,1 % | 92,3 % |
-| RWR · kein Reservoir | 86,0 % | 82,5 % |
-| RWR · kein Reservoir, ohne Prior-Korrektur | 91,0 % | 55,2 % |
-| RWR · FlyHash 2048 KC | 78,9 % | 81,2 % |
-| RWR · dichte Zufallsprojektion | 85,3 % | 82,6 % |
-
-Konform (ε = 0,1): Abdeckung 90 % wie angestrebt; eine zurückgehaltene Art wird aber nur
-zu 14–44 % als unbekannt erkannt (kryptische Arten). **FlyHash schlägt die Kontrollen hier
-nicht**, und LDA bleibt deutlich besser; ein Vorteil des Fly-Rechenraums ist also nicht belegt.
-
-Mit nur **10 Exemplaren pro Art** als Referenz (20 Ziehungen, Rest als Abfrage) sinkt die balancierte
-Genauigkeit auf 81,7 % ± 8,0 (Procrustes + PCA + LDA), kNN 75,7 %, RWR 69,7 % – realistisch für
-einen ersten eigenen Datensatz kryptischer Arten.
+Die frühere Tabelle mit globaler Procrustes-/z-Score-Anpassung wurde entfernt. Die aktuellen
+Messwerte und das genaue Protokoll stehen in `test-data/landmark-benchmark.json`. Sie belegen
+keine Genauigkeit der vollständigen Bildpipeline und keinen Nutzen echter gepaarter Bee-WIP-Daten.
+Der [Auditbericht](docs/pipeline-audit.md) dokumentiert die verbleibenden Daten- und Forschungsaufgaben.
 
 ### Tests
 
@@ -290,7 +292,7 @@ und die mm-Länge. Beide brauchen einen Server auf `127.0.0.1:8000`.
 ## Was noch nicht „Publikationsniveau“ ist
 
 - Die WIP- und Aderungsfeatures sind bewusst leichtgewichtig und interpretierbar. Für ernsthafte Taxonomie sollten CNN/ViT-Embeddings bzw. automatische Landmark-Erkennung ergänzt werden.
-- Die offene-Art-Erkennung ist konform kalibriert, erkennt aber auf Landmarkdaten zurückgehaltene kryptische Arten nur selten; für Bildmerkmale ist sie noch nicht mit Leave-one-species-out geprüft.
+- Das eingefrorene Modell nutzt getrennte Kalibrierungstiere; die Live-Bestimmung bleibt heuristisch. Die Erkennung unbekannter Arten braucht einen separaten Test mit zurückgehaltenen Taxa.
 - Die Mushroom-Body-Variante ist biologisch inspiriert; nur der importierte Graph verwendet reale FlyWire-Konnektivität.
 - Vor einer wissenschaftlichen Aussage muss gegen starke Baselines verglichen werden: Procrustes+LDA/SVM, kNN, direkte CNN/ViT-Klassifikation, randomisiertes Reservoir und randomisierte FlyWire-Topologie.
 
@@ -298,7 +300,7 @@ und die mm-Länge. Beide brauchen einen Server auf `127.0.0.1:8000`.
 
 Für einen Proof of Concept eher 5–10 gut abgesicherte Arten, mehrere Individuen pro Art, standardisierte WIP-Aufnahme und Durchlichtaufnahme desselben Flügels. Danach schwierige Artgruppen hinzufügen.
 
-## Step 1 · Flügelnormalisierung (wing-normalizer-0.2)
+## Step 1 · Flügelnormalisierung (wing-normalizer-0.3)
 
 Start jetzt **über HTTP**, da ES-Module und Web Worker verwendet werden:
 

@@ -5,23 +5,23 @@
 // A frozen model does not change when references are added; retrain to
 // include them. Queries are aligned to the model's stored landmark mean
 // shape (ordinary Procrustes) instead of re-running GPA.
-import { commonBlocks, fitStandardizer, standardizerFromParams, makeEmbedder, mulberry32 } from "./embedding.js";
+import { commonBlocks, fitStandardizer, standardizerFromParams, makeEmbedder, mulberry32, RESERVOIR_DEFAULTS } from "./embedding.js";
 import {
   similarityContext,
   querySimilarities,
   rwrScores,
   knnScores,
   argmax,
-  calibrate,
+  splitCalibrate,
   conformalPredict,
-  conformalEvaluation,
+
   summarize,
   CLASSIFIER_DEFAULTS,
 } from "./classify.js";
-import { gpa, alignToMean, fitCalibratedShapeLDA, shapeLDAFromParams } from "./morphometrics.js";
+import { gpa, alignToMean, fitCalibratedShapeLDA, fitShapeLDA, shapeLDAFromParams } from "./morphometrics.js";
 
-export const MODEL_VERSION = "wingmate-model-1";
-export const READY_SPECIMENS = 10; // per taxon; below ~9 the conformal set cannot reject (ε = 0.1)
+export const MODEL_VERSION = "wingmate-model-2";
+export const READY_SPECIMENS = 10; // dataset-size heuristic; not a calibration guarantee
 const METHODS = {
   lda: "Procrustes + PCA + LDA (Landmarken)",
   rwr: "Random Walk (kNN-Graph)",
@@ -58,7 +58,8 @@ export function stratifiedGroupFolds(labels, groups, k = 5, seed = 1) {
 // Order-independent fingerprint of a reference set (FNV-1a over sorted ids).
 export function referenceFingerprint(ids) {
   let h = 2166136261 >>> 0;
-  for (const id of [...ids].sort()) for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619) >>> 0;
+  const entries = ids.map((r) => typeof r === "string" ? r : JSON.stringify({ id: r.id, species: r.species, group: r.group, sex: r.sex, series: r.series, features: r.features })).sort();
+  for (const id of entries) for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619) >>> 0;
   return `${ids.length}:${h.toString(16)}`;
 }
 
@@ -113,119 +114,173 @@ const configOf = (flat) => {
 };
 const flatOf = (config) => config.flat();
 
-// refs: [{ id, species, group, features }]. settings: { name, mode, params,
-// preprocessingVersion, folds }. onProgress(fraction, stage).
-export function trainModel(refs, settings, onProgress = () => {}) {
-  const { mode = "fly", params = {}, folds: k = 5, name = "Modell" } = settings;
-  if (mode === "graph") throw Error("Der FlyWire-Graphmodus ist explorativ und wird nicht eingefroren.");
-  const taxa = [...new Set(refs.map((r) => r.species))];
-  if (taxa.length < 2) throw Error("Training braucht mindestens zwei Taxa.");
-  const labels = refs.map((r) => r.species),
-    groups = refs.map((r) => r.group),
-    features = refs.map((r) => r.features),
-    blocks = commonBlocks(features);
-  if (!blocks.length) throw Error("Keine Merkmalsblöcke, die alle Referenzen haben.");
-  onProgress(0.02, "Merkmale ausrichten");
-
-  // Landmarks: Procrustes consensus of the references (label-free).
-  const withLandmarks = blocks.includes("landmarks"),
-    alignment = withLandmarks ? gpa(features.map((f) => configOf(f.blocks.landmarks))) : null,
-    X = alignment ? alignment.flat : null,
-    prepared = features.map((f, i) => (X ? { ...f, blocks: { ...f.blocks, landmarks: X[i] } } : f));
-  const standardizer = fitStandardizer(prepared, blocks),
-    vectors = prepared.map((f) => standardizer.transform(f)),
-    embed = makeEmbedder(mode, standardizer.dim, params),
-    ctx = similarityContext(vectors.map(embed)),
-    calibration = calibrate(ctx, labels, groups);
-
-  // Stratified grouped k-fold: identical folds for every method.
-  const foldCount = Math.max(2, Math.min(k, new Set(groups).size)),
-    fold = stratifiedGroupFolds(labels, groups, foldCount),
-    predictions = { rwr: Array(refs.length).fill(null), knn: Array(refs.length).fill(null), lda: X ? Array(refs.length).fill(null) : null },
-    ldaProbabilities = X ? Array(refs.length).fill(null) : null;
-  for (let f = 0; f < foldCount; f++) {
-    onProgress(0.05 + (0.8 * f) / foldCount, `Kreuzvalidierung ${f + 1}/${foldCount}`);
-    const excluded = Uint8Array.from(fold, (v) => (v === f ? 1 : 0)),
-      train = refs.map((_, i) => i).filter((i) => !excluded[i]);
-    if (!train.length || new Set(train.map((i) => labels[i])).size < 2) continue;
-    const lda = X ? fitCalibratedShapeLDA(train.map((i) => X[i]), train.map((i) => labels[i]), train.map((i) => groups[i])) : null;
-    for (let i = 0; i < refs.length; i++) {
-      if (!excluded[i]) continue;
-      // A taxon absent from the training folds cannot be predicted: skip, like LOO does.
-      if (!train.some((j) => labels[j] === labels[i])) continue;
-      const qs = ctx.sims.subarray(i * ctx.n, (i + 1) * ctx.n);
-      predictions.rwr[i] = argmax(rwrScores(ctx, labels, qs, excluded));
-      predictions.knn[i] = argmax(knnScores(ctx, labels, qs, excluded));
-      if (lda) {
-        ldaProbabilities[i] = lda.predictProba(X[i]);
-        predictions.lda[i] = argmax(ldaProbabilities[i]);
-      }
-    }
+// A model's input contract is explicit. Partial diagnostic modalities require
+// a selected mode rather than silently discarding them for every reference.
+export function resolveBlocks(features, selected = null) {
+  const blocks = selected ?? commonBlocks(features);
+  if (!selected) {
+    const partial = ["venation", "wip", "landmarks"].filter((b) =>
+      features.some((f) => f.blocks?.[b]) && !blocks.includes(b));
+    if (partial.length) throw Error(`Unvollständige Merkmale (${partial.join(", ")}). Eingabemodus wählen oder fehlende Aufnahmen ergänzen.`);
   }
-  const evaluation = { folds: foldCount, protocol: "stratifizierte, nach Exemplar gruppierte Kreuzvalidierung", methods: {} };
-  for (const [key, preds] of Object.entries(predictions))
-    if (preds) evaluation.methods[key] = { name: METHODS[key], ...summarize(labels, preds) };
-  if (ldaProbabilities) evaluation.ldaCalibration = calibrationStats(ldaProbabilities, labels);
-  // Transfer check: hold out one whole series (collection / capture session)
-  // at a time. Only when every reference names its series.
+  if (!blocks.length) throw Error("Keine gemeinsamen Merkmalsblöcke.");
+  for (const f of features) {
+    for (const b of blocks) {
+      const v = f.blocks?.[b];
+      if (!Array.isArray(v) || !v.length || v.length !== features[0].blocks?.[b]?.length || !v.every(Number.isFinite))
+        throw Error(`Merkmalsblock ${b} fehlt, hat falsche Länge oder ungültige Werte.`);
+    }
+    if (f.version !== features[0].version) throw Error("Merkmalsversionen stimmen nicht überein.");
+    if (blocks.includes("landmarks") && (f.landmarkScheme !== features[0].landmarkScheme || f.blocks.landmarks.length % 2))
+      throw Error("Landmark-Schemata stimmen nicht überein.");
+  }
+  return [...blocks];
+}
+
+// All learned transforms belong exclusively to these training references.
+export function fitReferenceSpace(refs, settings = {}) {
+  const { mode = "fly", params = {}, graph = null } = settings;
+  const features = refs.map((r) => r.features), blocks = resolveBlocks(features, settings.blocks);
+  const configs = blocks.includes("landmarks") ? features.map((f) => configOf(f.blocks.landmarks)) : null;
+  const alignment = configs ? gpa(configs) : null;
+  const prepare = (f) => alignment
+    ? { ...f, blocks: { ...f.blocks, landmarks: flatOf(alignToMean(configOf(f.blocks.landmarks), alignment.mean)) } }
+    : f;
+  const prepared = features.map(prepare), standardizer = fitStandardizer(prepared, blocks);
+  const embed = makeEmbedder(mode, standardizer.dim, params, graph);
+  const vectors = prepared.map((f) => standardizer.transform(f)), embeddings = vectors.map(embed);
+  return {
+    blocks, configs, alignment, standardizer, vectors, embeddings,
+    X: alignment ? prepared.map((f) => f.blocks.landmarks) : null,
+    toEmbedding: (f) => { resolveBlocks([features[0], f], blocks); return embed(standardizer.transform(prepare(f))); },
+    landmarkVector: (f) => prepare(f).blocks.landmarks,
+    ctx: similarityContext(embeddings), labels: refs.map((r) => r.species), groups: refs.map((r) => r.group),
+  };
+}
+
+// Deterministic, taxon-stratified animal holdout; both wings stay together.
+// Small taxa retain at least two training animals. Limited calibration is
+// reported honestly instead of borrowing animals back into training.
+export function calibrationSplit(refs, fraction = 0.2, seed = 17) {
+  if (!(fraction > 0 && fraction < 1)) throw Error("Ungültiger Kalibrierungsanteil.");
+  const byTaxon = {}, chosen = new Set(), rnd = mulberry32(seed);
+  for (const r of refs) (byTaxon[r.species] ??= new Set()).add(r.group);
+  for (const taxon of Object.keys(byTaxon).sort()) {
+    const list = [...byTaxon[taxon]].sort();
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    const n = Math.max(0, Math.min(list.length - 2, Math.max(1, Math.floor(list.length * fraction))));
+    list.slice(0, n).forEach((g) => chosen.add(g));
+  }
+  return { training: refs.filter((r) => !chosen.has(r.group)), calibration: refs.filter((r) => chosen.has(r.group)) };
+}
+function fitPipeline(refs, settings) {
+  const split = calibrationSplit(refs, settings.calibrationFraction ?? 0.2);
+  const space = fitReferenceSpace(split.training, settings);
+  const calibration = splitCalibrate(space.ctx, space.labels, space.groups,
+    split.calibration.map((r) => space.toEmbedding(r.features)),
+    split.calibration.map((r) => r.species), split.calibration.map((r) => r.group), settings.classifier);
+  const lda = !space.X || settings.includeLDA === false ? null
+    : settings.calibrateLDA === false ? fitShapeLDA(space.X, space.labels)
+    : fitCalibratedShapeLDA(space.X, space.labels, space.groups, { landmarkConfigs: space.configs });
+  return { ...space, ...split, calibration, lda };
+}
+function predictPipeline(pipeline, features, classifier) {
+  const qs = querySimilarities(pipeline.ctx, pipeline.toEmbedding(features));
+  return {
+    rwr: rwrScores(pipeline.ctx, pipeline.labels, qs, undefined, classifier),
+    knn: knnScores(pipeline.ctx, pipeline.labels, qs, undefined, classifier),
+    lda: pipeline.lda?.predictProba(pipeline.landmarkVector(features)) ?? null,
+    conformal: conformalPredict(qs, pipeline.labels, pipeline.calibration, undefined, { ...classifier, referenceGroups: pipeline.groups }),
+  };
+}
+
+export function evaluateReferences(refs, settings = {}, onProgress = () => {}) {
+  if (refs.some((r) => r.group === null || r.group === undefined || r.group === "")) throw Error("Validierung braucht eine stabile Exemplar-ID für jede Referenz.");
+  const labels = refs.map((r) => r.species), groups = refs.map((r) => r.group);
+  const blocks = resolveBlocks(refs.map((r) => r.features), settings.blocks);
+  const foldCount = Math.max(2, Math.min(settings.folds ?? 5, new Set(groups).size));
+  const fold = stratifiedGroupFolds(labels, groups, foldCount);
+  const predictions = { rwr: Array(refs.length).fill(null), knn: Array(refs.length).fill(null),
+    ...(blocks.includes("landmarks") && settings.includeLDA !== false ? { lda: Array(refs.length).fill(null) } : {}) };
+  const probabilities = Array(refs.length).fill(null), conformal = Array(refs.length).fill(null);
+  const evaluateHoldout = (held, target, withCalibration = false) => {
+    const heldGroups = new Set(refs.filter(held).map((r) => r.group));
+    const train = refs.filter((r) => !heldGroups.has(r.group));
+    if (new Set(train.map((r) => r.species)).size < 2) return;
+    const pipeline = fitPipeline(train, { ...settings, blocks });
+    refs.forEach((r, i) => {
+      if (!heldGroups.has(r.group) || !pipeline.labels.includes(r.species)) return;
+      const result = predictPipeline(pipeline, r.features, settings.classifier);
+      for (const key of Object.keys(target)) target[key][i] = argmax(result[key]);
+      if (withCalibration) { probabilities[i] = result.lda; conformal[i] = result.conformal; }
+    });
+  };
+  for (let f = 0; f < foldCount; f++) {
+    onProgress(0.05 + 0.75 * f / foldCount, `Kreuzvalidierung ${f + 1}/${foldCount}`);
+    evaluateHoldout((_, i) => fold[i] === f, predictions, true);
+  }
+  const evaluation = {
+    folds: foldCount, protocol: "nach Exemplar gruppiert; alle Anpassungen nur im Trainingsfold",
+    selectionOnly: true,
+    methods: Object.fromEntries(Object.entries(predictions).map(([k, p]) => [k, { name: METHODS[k], ...summarize(labels, p) }])),
+  };
+  if (predictions.lda && settings.calibrateLDA !== false) evaluation.ldaCalibration = calibrationStats(probabilities, labels);
+  const valid = conformal.filter((r) => r?.openSetValid);
+  evaluation.conformal = {
+    protocol: "split-specimen-max", epsilon: settings.classifier?.epsilon ?? CLASSIFIER_DEFAULTS.epsilon,
+    knownQueries: conformal.filter(Boolean).length, validQueries: valid.length,
+    coverage: valid.length ? conformal.reduce((n, r, i) => n + (r?.openSetValid && r.set.includes(labels[i]) ? 1 : 0), 0) / valid.length : null,
+    falseUnknownRate: valid.length ? valid.filter((r) => r.unknown).length / valid.length : null,
+    meanSetSize: valid.length ? valid.reduce((n, r) => n + r.set.length, 0) / valid.length : null,
+    novelTaxon: {},
+  };
   const series = refs.map((r) => r.series || null);
   if (series.every(Boolean) && new Set(series).size >= 2) {
-    onProgress(0.8, "Serien-Transfer prüfen");
-    const transfer = { rwr: Array(refs.length).fill(null), knn: Array(refs.length).fill(null), lda: X ? Array(refs.length).fill(null) : null };
-    for (const held of new Set(series)) {
-      const excluded = Uint8Array.from(series, (v) => (v === held ? 1 : 0)),
-        train = refs.map((_, i) => i).filter((i) => !excluded[i]);
-      if (new Set(train.map((i) => labels[i])).size < 2) continue;
-      const lda = X ? fitCalibratedShapeLDA(train.map((i) => X[i]), train.map((i) => labels[i]), train.map((i) => groups[i])) : null;
-      for (let i = 0; i < refs.length; i++) {
-        if (!excluded[i] || !train.some((j) => labels[j] === labels[i])) continue;
-        const qs = ctx.sims.subarray(i * ctx.n, (i + 1) * ctx.n);
-        transfer.rwr[i] = argmax(rwrScores(ctx, labels, qs, excluded));
-        transfer.knn[i] = argmax(knnScores(ctx, labels, qs, excluded));
-        if (lda) transfer.lda[i] = lda.predict(X[i]);
-      }
-    }
-    evaluation.seriesTransfer = {
-      series: new Set(series).size,
-      methods: Object.fromEntries(Object.entries(transfer).filter(([, p]) => p).map(([k, p]) => [k, { name: METHODS[k], ...summarize(labels, p) }])),
-    };
+    const transfer = Object.fromEntries(Object.keys(predictions).map((k) => [k, Array(refs.length).fill(null)]));
+    for (const held of new Set(series)) evaluateHoldout((r) => r.series === held, transfer);
+    evaluation.seriesTransfer = { series: new Set(series).size,
+      methods: Object.fromEntries(Object.entries(transfer).map(([k, p]) => [k, { name: METHODS[k], ...summarize(labels, p) }])) };
   }
-  onProgress(0.88, "Open-Set kalibrieren");
-  evaluation.conformal = conformalEvaluation(ctx, labels, groups);
-  const ranked = Object.entries(evaluation.methods)
-      .filter(([, m]) => m.balancedAccuracy !== null)
-      .sort((a, b) => b[1].balancedAccuracy - a[1].balancedAccuracy || ["lda", "rwr", "knn"].indexOf(a[0]) - ["lda", "rwr", "knn"].indexOf(b[0])),
-    primary = ranked[0]?.[0] ?? "rwr";
+  return evaluation;
+}
 
-  onProgress(0.92, "Endmodell anpassen");
-  const lda = X ? fitCalibratedShapeLDA(X, labels, groups) : null,
-    dim = standardizer.dim,
-    packed = new Float32Array(refs.length * dim);
-  vectors.forEach((v, i) => packed.set(v, i * dim));
-  onProgress(1, "fertig");
-  return {
-    version: MODEL_VERSION,
-    id: settings.id ?? (globalThis.crypto?.randomUUID?.() ?? String(Date.now())),
-    name,
-    createdAt: new Date().toISOString(),
-    featureVersion: features[0].version,
-    preprocessingVersion: settings.preprocessingVersion ?? null,
-    blocks,
-    landmarkScheme: withLandmarks ? features[0].landmarkScheme : null,
-    reservoir: { mode, params },
-    classifier: { ...CLASSIFIER_DEFAULTS },
-    references: { count: refs.length, fingerprint: referenceFingerprint(refs.map((r) => r.id)), ids: refs.map((r) => r.id) },
-    taxa: readiness(refs),
-    standardizer: standardizer.params,
-    vectors: packed,
-    labels,
-    groups,
-    calibration: Float32Array.from(calibration, (v) => (v === null ? NaN : v)),
-    landmarkMean: alignment ? Float32Array.from(flatOf(alignment.mean)) : null,
-    lda: lda?.params ?? null,
-    evaluation,
-    primary,
+export function trainModel(refs, settings = {}, onProgress = () => {}) {
+  const { mode = "fly", params = {}, name = "Modell" } = settings;
+  if (mode === "graph") throw Error("Der FlyWire-Graphmodus ist explorativ und wird nicht eingefroren.");
+  if (new Set(refs.map((r) => r.species)).size < 2) throw Error("Training braucht mindestens zwei Taxa.");
+  if (refs.some((r) => r.group === null || r.group === undefined || r.group === "")) throw Error("Training braucht eine stabile Exemplar-ID für jede Referenz.");
+  // Reject contradictory specimen labels before making any split.
+  stratifiedGroupFolds(refs.map((r) => r.species), refs.map((r) => r.group));
+  const blocks = resolveBlocks(refs.map((r) => r.features), settings.blocks);
+  const classifier = { ...CLASSIFIER_DEFAULTS, ...settings.classifier };
+  const resolved = { ...settings, mode, params: { ...RESERVOIR_DEFAULTS, ...params }, blocks, classifier };
+  const evaluation = evaluateReferences(refs, resolved, onProgress);
+  const ranked = Object.entries(evaluation.methods).filter(([, m]) => m.balancedAccuracy !== null)
+    .sort((a, b) => b[1].balancedAccuracy - a[1].balancedAccuracy || ["lda", "rwr", "knn"].indexOf(a[0]) - ["lda", "rwr", "knn"].indexOf(b[0]));
+  if (!ranked.length) throw Error("Keine auswertbaren Folds. Mehr unabhängige Exemplare pro Taxon ergänzen.");
+  onProgress(0.9, "Endmodell und unabhängige Kalibrierung anpassen");
+  const pipeline = fitPipeline(refs, resolved), dim = pipeline.standardizer.dim;
+  const packed = new Float32Array(pipeline.training.length * dim);
+  pipeline.vectors.forEach((v, i) => packed.set(v, i * dim));
+  const model = {
+    version: MODEL_VERSION, id: settings.id ?? (globalThis.crypto?.randomUUID?.() ?? String(Date.now())),
+    name, createdAt: new Date().toISOString(), featureVersion: refs[0].features.version,
+    preprocessingVersion: settings.preprocessingVersion ?? null, blocks,
+    landmarkScheme: blocks.includes("landmarks") ? refs[0].features.landmarkScheme : null,
+    reservoir: { mode, params: resolved.params }, classifier,
+    references: { count: refs.length, fingerprint: referenceFingerprint(refs), ids: refs.map((r) => r.id),
+      trainingIds: pipeline.training.map((r) => r.id), calibrationGroups: pipeline.calibration.groups,
+      trainingCount: pipeline.training.length, calibrationSpecimens: pipeline.calibration.groups.length },
+    taxa: readiness(refs), standardizer: pipeline.standardizer.params, vectors: packed,
+    labels: pipeline.labels, groups: pipeline.groups, calibration: pipeline.calibration,
+    landmarkMean: pipeline.alignment ? Float32Array.from(flatOf(pipeline.alignment.mean)) : null,
+    lda: pipeline.lda?.params ?? null, evaluation, primary: ranked[0][0],
   };
+  onProgress(1, "fertig");
+  return model;
 }
 
 // Balanced mean top probability vs. balanced accuracy, and Brier score.
@@ -250,14 +305,36 @@ function calibrationStats(probabilities, labels) {
 
 // Rebuild a runtime classifier from a (deserialised) model.
 export function loadModel(model) {
-  if (model?.version !== MODEL_VERSION) throw Error("Kein Modell der Version " + MODEL_VERSION);
+  if (model?.version !== MODEL_VERSION) throw Error("Modell-Version nicht unterstützt. Referenzen mit der aktuellen Version neu trainieren (" + MODEL_VERSION + ").");
+  const c = model.classifier, cal = model.calibration;
+  if (!c || !(c.alpha >= 0 && c.alpha <= 1) || !(c.epsilon > 0 && c.epsilon < 1) ||
+      !["k", "steps", "voteK", "conformalM"].every((k) => Number.isInteger(c[k]) && c[k] > 0) ||
+      !(Number.isFinite(c.power) && c.power > 0) || typeof c.balanced !== "boolean") throw Error("Ungültige Klassifikator-Einstellungen im Modell.");
+  if (!cal || cal.protocol !== "split-specimen-max" || !Array.isArray(cal.scores) ||
+      cal.labels?.length !== cal.scores.length || cal.groups?.length !== cal.scores.length ||
+      new Set(cal.groups).size !== cal.groups.length || cal.groups.some((g) => model.groups.includes(g)) ||
+      !cal.scores.every(Number.isFinite) || !cal.labels.every((l) => model.labels.includes(l))) throw Error("Ungültige oder überlappende Kalibrierungsdaten im Modell.");
+  const layout = model.standardizer?.layout, nRefs = model.labels?.length;
+  if (!layout?.length || !nRefs || model.groups?.length !== nRefs) throw Error("Unvollständiges Modell.");
+  const dimensions = layout.reduce((n, l) => n + l.dim, 0);
+  if (!layout.every((l) => Number.isInteger(l.dim) && l.dim > 0) || model.vectors?.length !== nRefs * dimensions ||
+      ![model.vectors, model.standardizer.mean, model.standardizer.sd, model.standardizer.weight].every((v) => v && [...v].every(Number.isFinite)) ||
+      !["mean", "sd", "weight"].every((k) => model.standardizer[k].length === dimensions) ||
+      JSON.stringify(model.blocks) !== JSON.stringify(layout.map((l) => l.block)) ||
+      [...model.standardizer.sd].some((s, i) => s < 0 || (s === 0 && model.standardizer.weight[i] !== 0))) throw Error("Ungültige Merkmalswerte im Modell.");
+  const params = model.reservoir?.params;
+  if (!params || !["kenyonCells", "fanIn", "seed"].every((k) => Number.isInteger(params[k])) ||
+      params.kenyonCells <= 0 || params.fanIn <= 0 || !(params.activeFraction > 0 && params.activeFraction <= 1)) throw Error("Ungültige Reservoir-Einstellungen im Modell.");
+  if (model.blocks.includes("landmarks") && (!model.landmarkMean ||
+      model.landmarkMean.length !== layout.find((l) => l.block === "landmarks").dim ||
+      ![...model.landmarkMean].every(Number.isFinite))) throw Error("Ungültige Landmark-Mittelform im Modell.");
   const standardizer = standardizerFromParams(model.standardizer),
     dim = standardizer.dim,
     embed = makeEmbedder(model.reservoir.mode, dim, model.reservoir.params),
     n = model.labels.length,
     vectors = Array.from({ length: n }, (_, i) => model.vectors.subarray(i * dim, (i + 1) * dim)),
     ctx = similarityContext(vectors.map(embed)),
-    calibration = Array.from(model.calibration, (v) => (Number.isNaN(v) ? null : v)),
+    calibration = model.calibration,
     mean = model.landmarkMean ? configOf(Array.from(model.landmarkMean)) : null,
     lda = model.lda ? shapeLDAFromParams(model.lda) : null;
   const alignedLandmarks = (features) => {
@@ -271,9 +348,12 @@ export function loadModel(model) {
     labels: model.labels,
     groups: model.groups,
     missingBlocks: (features) => model.blocks.filter((b) => !Array.isArray(features.blocks[b]) || (b === "landmarks" && !alignedLandmarks(features))),
-    classify(features) {
+    classify(features, preprocessingVersion = model.preprocessingVersion) {
+      if (features?.version !== model.featureVersion) throw Error("Merkmalsversion passt nicht zum Modell.");
+      if (preprocessingVersion !== model.preprocessingVersion) throw Error("Vorverarbeitungsversion passt nicht zum Modell.");
       const missing = this.missingBlocks(features);
       if (missing.length) throw Error(`Das Modell braucht Merkmale, die dieser Aufnahme fehlen: ${missing.join(", ")}.`);
+      resolveBlocks([features], model.blocks);
       const landmarks = alignedLandmarks(features),
         prepared = landmarks ? { ...features, blocks: { ...features.blocks, landmarks } } : features,
         q = embed(standardizer.transform(prepared)),
@@ -281,9 +361,9 @@ export function loadModel(model) {
       return {
         qs,
         embedding: q,
-        scores: rwrScores(ctx, model.labels, qs),
-        knn: knnScores(ctx, model.labels, qs),
-        conformal: conformalPredict(qs, model.labels, calibration),
+        scores: rwrScores(ctx, model.labels, qs, undefined, model.classifier),
+        knn: knnScores(ctx, model.labels, qs, undefined, model.classifier),
+        conformal: conformalPredict(qs, model.labels, calibration, undefined, { ...model.classifier, referenceGroups: model.groups }),
         lda: lda && landmarks ? { probabilities: lda.predictProba(landmarks), model: lda } : null,
         best: Math.max(...qs),
       };

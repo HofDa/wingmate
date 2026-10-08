@@ -5,10 +5,16 @@ const hint = document.querySelector('#installHint');
 let installPrompt = null;
 let offlineReady = false;
 
+function setStatus(label, description = label, kind = 'info') {
+  status.textContent = label;
+  status.title = description;
+  status.setAttribute('aria-label', description);
+  status.dataset.kind = kind;
+}
 function showStatus() {
-  status.textContent = offlineReady
-    ? (navigator.onLine ? 'Offline bereit' : 'Offline · lokal nutzbar')
-    : (navigator.onLine ? 'Offline-Nutzung wird vorbereitet …' : 'Offline-Nutzung noch nicht vorbereitet. Bitte einmal online öffnen.');
+  if (offlineReady) setStatus(navigator.onLine ? 'Offline bereit' : 'Offline · lokal nutzbar', undefined, 'ok');
+  else if (navigator.onLine) setStatus('Offline vorbereiten', 'Offline-Nutzung wird vorbereitet …');
+  else setStatus('Offline nicht bereit', 'Offline-Nutzung noch nicht vorbereitet. Bitte einmal online öffnen.', 'warn');
 }
 function showInstallHint() {
   const installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
@@ -54,7 +60,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       const worker = registration.installing;
       worker?.addEventListener('statechange', () => {
         if (worker.state === 'installed') showUpdate();
-        if (worker.state === 'redundant' && !offlineReady) status.textContent = 'Offline-Vorbereitung fehlgeschlagen. Bitte online neu laden.';
+        if (worker.state === 'redundant' && !offlineReady) setStatus('Offline nicht bereit', 'Offline-Vorbereitung fehlgeschlagen. Bitte online neu laden.', 'warn');
       });
     });
     updateButton.addEventListener('click', () => {
@@ -67,8 +73,8 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     offlineReady = true;
     showStatus();
   } catch {
-    status.textContent = 'Offline-Nutzung konnte nicht eingerichtet werden. Bitte online neu laden.';
+    setStatus('Offline nicht bereit', 'Offline-Nutzung konnte nicht eingerichtet werden. Bitte online neu laden.', 'warn');
   }
 } else {
-  status.textContent = 'Installation und Offline-Nutzung benötigen HTTPS oder localhost.';
+  setStatus('Browser-Modus', 'Installation und Offline-Nutzung benötigen HTTPS oder localhost.');
 }

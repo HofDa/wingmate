@@ -2,7 +2,7 @@
 // (base left, tip right, anterior up). Only pixels inside the wing mask
 // contribute; background and the contour edge never enter venation or WIP
 // statistics. All blocks are deterministic and interpretable.
-export const FEATURE_VERSION = "wing-features-1";
+export const FEATURE_VERSION = "wing-features-2";
 const GRID_X = 8,
   GRID_Y = 4,
   ORIENTATION_BINS = 8,
@@ -12,35 +12,39 @@ const GRID_X = 8,
 
 // Area-average the normalized image by `factor`; coverage = fraction of
 // source pixels inside the mask. Colour is averaged over masked pixels only.
-export function downsample({ data, mask, width, height }, factor = 4) {
+export function downsample({ data, mask, signalMask = mask, width, height }, factor = 4) {
   const w = Math.floor(width / factor),
     h = Math.floor(height / factor),
     rgb = new Float32Array(w * h * 3),
-    coverage = new Float32Array(w * h);
+    coverage = new Float32Array(w * h),
+    signalCoverage = new Float32Array(w * h);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       let r = 0,
         g = 0,
         b = 0,
-        n = 0;
+        n = 0,
+        maskCount = 0;
       for (let yy = y * factor; yy < (y + 1) * factor; yy++)
         for (let xx = x * factor; xx < (x + 1) * factor; xx++) {
           const p = yy * width + xx;
-          if (!mask[p]) continue;
+          if (mask[p]) maskCount++;
+          if (!signalMask[p]) continue;
           r += data[p * 4];
           g += data[p * 4 + 1];
           b += data[p * 4 + 2];
           n++;
         }
       const q = y * w + x;
-      coverage[q] = n / (factor * factor);
+      coverage[q] = maskCount / (factor * factor);
+      signalCoverage[q] = n / (factor * factor);
       if (n) {
         rgb[q * 3] = r / n;
         rgb[q * 3 + 1] = g / n;
         rgb[q * 3 + 2] = b / n;
       }
     }
-  return { rgb, coverage, width: w, height: h };
+  return { rgb, coverage, signalCoverage, width: w, height: h };
 }
 
 const srgbToLinear = (v) => {
@@ -112,7 +116,8 @@ export function shapeFeatures(small) {
 // only taken where the full 3 × 3 neighbourhood is inside the wing, which
 // excludes the silhouette edge.
 export function venationFeatures(small) {
-  const { rgb, coverage, width: w, height: h } = small,
+  const { rgb, width: w, height: h } = small,
+    coverage = small.signalCoverage ?? small.coverage,
     gray = new Float32Array(w * h);
   let sum = 0,
     sq = 0,
@@ -128,6 +133,8 @@ export function venationFeatures(small) {
   if (n < 50) throw Error("Zu wenig Flügelinneres für Adermerkmale");
   const mean = sum / n,
     sd = Math.sqrt(Math.max(1e-6, sq / n - mean * mean));
+  // Do not amplify a uniform membrane/quantisation noise into apparent veins.
+  if (sd < 1) return new Float32Array(GRID_X * GRID_Y * (ORIENTATION_BINS + 1));
   const hist = new Float32Array(GRID_X * GRID_Y * ORIENTATION_BINS),
     dark = new Float32Array(GRID_X * GRID_Y),
     count = new Float32Array(GRID_X * GRID_Y);
@@ -169,7 +176,8 @@ export function venationFeatures(small) {
 // histogram and chroma distribution over the whole membrane. No white balance
 // is applied – colour is the signal, so capture conditions must be fixed.
 export function wipFeatures(small) {
-  const { rgb, coverage, width: w, height: h } = small,
+  const { rgb, width: w, height: h } = small,
+    coverage = small.signalCoverage ?? small.coverage,
     cells = new Float32Array(GRID_X * GRID_Y * 3),
     count = new Float32Array(GRID_X * GRID_Y),
     hue = new Float32Array(HUE_BINS),
